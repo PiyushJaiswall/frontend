@@ -75,17 +75,62 @@ function extractKeyPoints(text, maxPoints = 4) {
     return keyPoints.slice(0, maxPoints);
 }
 
+// NEW: Function to validate if transcript is worth summarizing
+function isValidTranscriptForSummarization(transcript) {
+    if (!transcript || !transcript.transcript_text) {
+        console.log(`❌ Skipping transcript ${transcript?.id}: No transcript_text`);
+        return false;
+    }
+
+    const text = transcript.transcript_text.trim();
+    
+    // Skip completely empty transcripts
+    if (text.length === 0) {
+        console.log(`❌ Skipping transcript ${transcript.id}: Empty transcript_text`);
+        return false;
+    }
+    
+    // Skip very short transcripts (less than 20 characters)
+    if (text.length < 20) {
+        console.log(`❌ Skipping transcript ${transcript.id}: Too short (${text.length} chars): "${text}"`);
+        return false;
+    }
+    
+    // Skip transcripts with only whitespace or basic punctuation
+    const meaningfulContent = text.replace(/[\s\.,!?;:-]+/g, '');
+    if (meaningfulContent.length < 10) {
+        console.log(`❌ Skipping transcript ${transcript.id}: No meaningful content: "${text}"`);
+        return false;
+    }
+    
+    // Skip common test phrases or empty recordings
+    const testPhrases = ['test', 'testing', 'hello test', 'mic test', 'one two three'];
+    const lowerText = text.toLowerCase();
+    const isJustTestPhrase = testPhrases.some(phrase => {
+        return lowerText === phrase || lowerText.replace(/[^a-z\s]/g, '').trim() === phrase;
+    });
+    
+    if (isJustTestPhrase && text.length < 50) {
+        console.log(`❌ Skipping transcript ${transcript.id}: Just a test phrase: "${text}"`);
+        return false;
+    }
+    
+    console.log(`✅ Valid transcript ${transcript.id}: ${text.length} chars`);
+    return true;
+}
+
 export async function POST() {
     try {
         console.log('🔍 Starting summarization process...');
         
-        // 1. First, get all transcript IDs - FIXED: Use correct column name
+        // 1. Get all transcripts with transcript_text
         const { data: allTranscripts, error: tError } = await supabase
             .from('transcripts')
-            .select('id, transcript_text, meeting_title, transcript_created_at, client_id');
+            .select('id, transcript_text, meeting_title, transcript_created_at, client_id')
+            .not('transcript_text', 'is', null); // Only get transcripts where transcript_text is not null
 
         if (tError) throw new Error(`Error fetching transcripts: ${tError.message}`);
-        console.log(`📄 Found ${allTranscripts?.length || 0} total transcripts`);
+        console.log(`📄 Found ${allTranscripts?.length || 0} total transcripts with transcript_text`);
 
         // 2. Get all existing meeting transcript_ids
         const { data: existingMeetings, error: mError } = await supabase
@@ -96,25 +141,33 @@ export async function POST() {
         if (mError) throw new Error(`Error fetching existing meetings: ${mError.message}`);
         console.log(`📊 Found ${existingMeetings?.length || 0} existing meetings with transcript_ids`);
 
-        // 3. Filter out already summarized transcripts
+        // 3. Filter for valid, unsummarized transcripts
         const existingTranscriptIds = new Set(existingMeetings?.map(m => m.transcript_id) || []);
-        const unsummarizedTranscripts = allTranscripts?.filter(t => 
-            !existingTranscriptIds.has(t.id) && 
-            t.transcript_text && 
-            t.transcript_text.trim().length > 10
-        ) || [];
+        
+        const validUnsummarizedTranscripts = allTranscripts?.filter(transcript => {
+            // Skip already summarized
+            if (existingTranscriptIds.has(transcript.id)) {
+                console.log(`⏭️  Skipping transcript ${transcript.id}: Already summarized`);
+                return false;
+            }
+            
+            // Check if transcript is valid for summarization
+            return isValidTranscriptForSummarization(transcript);
+        }) || [];
 
-        console.log(`🔄 Found ${unsummarizedTranscripts.length} transcripts to summarize`);
-        console.log('Unsummarized transcript IDs:', unsummarizedTranscripts.map(t => t.id));
+        console.log(`🔄 Found ${validUnsummarizedTranscripts.length} valid transcripts to summarize`);
+        console.log('Valid unsummarized transcript IDs:', validUnsummarizedTranscripts.map(t => t.id));
 
-        if (unsummarizedTranscripts.length === 0) {
+        if (validUnsummarizedTranscripts.length === 0) {
             return NextResponse.json({ 
-                message: "No new transcripts to summarize.", 
+                message: "No valid new transcripts to summarize.", 
                 processedCount: 0,
                 details: {
                     totalTranscripts: allTranscripts?.length || 0,
                     existingMeetings: existingMeetings?.length || 0,
-                    alreadySummarized: existingTranscriptIds.size
+                    alreadySummarized: existingTranscriptIds.size,
+                    validForSummarization: 0,
+                    skippedEmpty: allTranscripts?.filter(t => !isValidTranscriptForSummarization(t)).length || 0
                 }
             });
         }
@@ -122,7 +175,7 @@ export async function POST() {
         let processedCount = 0;
         const errors = [];
 
-        for (const transcript of unsummarizedTranscripts) {
+        for (const transcript of validUnsummarizedTranscripts) {
             try {
                 console.log(`📝 Processing transcript: ${transcript.id}`);
                 
@@ -166,15 +219,16 @@ export async function POST() {
         }
         
         return NextResponse.json({ 
-            message: `Summarization complete! Processed ${processedCount} out of ${unsummarizedTranscripts.length} transcripts.`, 
+            message: `Summarization complete! Processed ${processedCount} out of ${validUnsummarizedTranscripts.length} valid transcripts.`, 
             processedCount,
             method: "frequency-based",
             errors: errors.length > 0 ? errors : undefined,
             details: {
                 totalTranscripts: allTranscripts?.length || 0,
-                unsummarizedFound: unsummarizedTranscripts.length,
+                validForSummarization: validUnsummarizedTranscripts.length,
                 successfullyProcessed: processedCount,
-                failed: errors.length
+                failed: errors.length,
+                skippedEmpty: allTranscripts?.filter(t => !isValidTranscriptForSummarization(t)).length || 0
             }
         });
 
