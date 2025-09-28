@@ -79,10 +79,10 @@ export async function POST() {
     try {
         console.log('🔍 Starting summarization process...');
         
-        // 1. First, get all transcript IDs
+        // 1. First, get all transcript IDs - FIXED: Use correct column name
         const { data: allTranscripts, error: tError } = await supabase
             .from('transcripts')
-            .select('id, transcript_text, meeting_title, created_at, client_id');
+            .select('id, transcript_text, meeting_title, transcript_created_at, client_id');
 
         if (tError) throw new Error(`Error fetching transcripts: ${tError.message}`);
         console.log(`📄 Found ${allTranscripts?.length || 0} total transcripts`);
