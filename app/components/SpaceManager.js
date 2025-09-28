@@ -7,9 +7,12 @@ import toast from 'react-hot-toast';
 export default function SpaceManager() {
     const [stats, setStats] = useState({ meetings: 0, transcripts: 0, validTranscripts: 0, unsummarized: 0 });
     const [meetings, setMeetings] = useState([]);
-    const [autoSummarizeEnabled, setAutoSummarizeEnabled] = useState(true);
+    const [autoSummarizeEnabled, setAutoSummarizeEnabled] = useState(false); // CHANGED: Default to false
     const [isSummarizing, setIsSummarizing] = useState(false);
+    const [lastFailedAttempt, setLastFailedAttempt] = useState(null);
+    const [failedAttempts, setFailedAttempts] = useState(0);
     const lastAutoSummarizeAttempt = useRef(0);
+    const consecutiveFailures = useRef(0);
     
     // Function to check if transcript is valid (same logic as API)
     const isValidTranscript = (transcript) => {
@@ -54,6 +57,13 @@ export default function SpaceManager() {
             const summarizedIds = new Set(summarizedTranscripts?.map(m => m.transcript_id) || []);
             const unsummarizedValidTranscripts = validTranscripts.filter(t => !summarizedIds.has(t.id));
             
+            console.log('📊 Stats Update:', {
+                total: transcriptsCount,
+                valid: validTranscripts.length,
+                unsummarized: unsummarizedValidTranscripts.length,
+                consecutiveFailures: consecutiveFailures.current
+            });
+            
             setStats({ 
                 meetings: meetingsCount || 0, 
                 transcripts: transcriptsCount || 0,
@@ -61,13 +71,30 @@ export default function SpaceManager() {
                 unsummarized: unsummarizedValidTranscripts.length
             });
 
-            // Auto-summarize logic with proper safeguards
+            // STRICT Auto-summarize logic with failure tracking
             const now = Date.now();
             const timeSinceLastAttempt = now - lastAutoSummarizeAttempt.current;
+            
+            // Don't auto-summarize if:
+            // 1. Auto-summarize is disabled
+            // 2. Currently summarizing
+            // 3. No unsummarized transcripts
+            // 4. Too soon since last attempt (less than 2 minutes)
+            // 5. Too many consecutive failures (more than 2)
             const shouldAutoSummarize = autoSummarizeEnabled && 
-                                      unsummarizedValidTranscripts.length > 0 && 
                                       !isSummarizing &&
-                                      timeSinceLastAttempt > 30000;
+                                      unsummarizedValidTranscripts.length > 0 && 
+                                      timeSinceLastAttempt > 120000 && // 2 minutes instead of 30 seconds
+                                      consecutiveFailures.current < 3; // Stop after 3 failures
+
+            console.log('🤖 Auto-summarize check:', {
+                enabled: autoSummarizeEnabled,
+                summarizing: isSummarizing,
+                unsummarized: unsummarizedValidTranscripts.length,
+                timeSince: Math.round(timeSinceLastAttempt / 1000),
+                failures: consecutiveFailures.current,
+                shouldTrigger: shouldAutoSummarize
+            });
 
             if (shouldAutoSummarize) {
                 console.log(`🤖 Auto-summarizing ${unsummarizedValidTranscripts.length} valid transcripts...`);
@@ -96,25 +123,32 @@ export default function SpaceManager() {
 
         const channel = supabase
             .channel('db-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'transcripts' }, (payload) => {
-                console.log('Transcript change detected:', payload.eventType);
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'transcripts' }, (payload) => {
+                console.log('New transcript inserted:', payload);
                 toast.success('New transcript detected!', { icon: '📝' });
+                // Reset failure counter on new transcript
+                consecutiveFailures.current = 0;
                 lastAutoSummarizeAttempt.current = 0;
-                setTimeout(fetchStats, 1000);
+                setTimeout(fetchStats, 2000);
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, (payload) => {
                 console.log('Meeting change detected:', payload.eventType);
-                toast.success('Database updated!', { icon: '💾' });
+                if (payload.eventType === 'INSERT') {
+                    toast.success('New meeting summarized!', { icon: '✅' });
+                    // Reset failure counter on successful meeting creation
+                    consecutiveFailures.current = 0;
+                }
                 fetchStats();
                 fetchAllMeetings();
             })
             .subscribe();
 
+        // Check less frequently - every 5 minutes instead of 1 minute
         const interval = setInterval(() => {
             if (!isSummarizing) {
                 fetchStats();
             }
-        }, 60000);
+        }, 300000); // 5 minutes
 
         return () => {
             supabase.removeChannel(channel);
@@ -151,27 +185,73 @@ export default function SpaceManager() {
             
             if (response.ok) {
                 if (result.processedCount > 0) {
+                    // SUCCESS - reset failure counter
+                    consecutiveFailures.current = 0;
+                    setFailedAttempts(0);
+                    setLastFailedAttempt(null);
+                    
                     toast.success(
                         `Successfully summarized ${result.processedCount} transcript(s) using ${result.method || 'free'} method.`, 
                         { id: toastId }
                     );
                 } else {
-                    toast.info(
+                    // NO TRANSCRIPTS PROCESSED - increment failure counter
+                    consecutiveFailures.current += 1;
+                    setFailedAttempts(prev => prev + 1);
+                    setLastFailedAttempt(new Date().toLocaleTimeString());
+                    
+                    toast.warning(
                         result.message || 'No valid transcripts found to summarize.',
                         { id: toastId }
                     );
+                    
+                    // Auto-disable after 3 failures
+                    if (consecutiveFailures.current >= 3) {
+                        setAutoSummarizeEnabled(false);
+                        toast.error('Auto-summarization disabled due to repeated failures. Check your transcripts.');
+                    }
                 }
                 fetchStats();
                 fetchAllMeetings();
             } else {
+                // API ERROR - increment failure counter
+                consecutiveFailures.current += 1;
+                setFailedAttempts(prev => prev + 1);
+                setLastFailedAttempt(new Date().toLocaleTimeString());
+                
                 toast.error(result.error || 'Summarization failed.', { id: toastId });
+                
+                // Auto-disable after 3 failures
+                if (consecutiveFailures.current >= 3) {
+                    setAutoSummarizeEnabled(false);
+                    toast.error('Auto-summarization disabled due to repeated failures.');
+                }
             }
         } catch (error) {
+            // NETWORK ERROR - increment failure counter
+            consecutiveFailures.current += 1;
+            setFailedAttempts(prev => prev + 1);
+            setLastFailedAttempt(new Date().toLocaleTimeString());
+            
             console.error('Summarization error:', error);
             toast.error('Failed to connect to summarization service.', { id: toastId });
+            
+            // Auto-disable after 3 failures
+            if (consecutiveFailures.current >= 3) {
+                setAutoSummarizeEnabled(false);
+                toast.error('Auto-summarization disabled due to connection issues.');
+            }
         } finally {
             setIsSummarizing(false);
         }
+    };
+
+    const resetFailures = () => {
+        consecutiveFailures.current = 0;
+        setFailedAttempts(0);
+        setLastFailedAttempt(null);
+        lastAutoSummarizeAttempt.current = 0;
+        toast.success('Failure counter reset!');
     };
 
     return (
@@ -207,6 +287,9 @@ export default function SpaceManager() {
                             {isSummarizing && (
                                 <p className="text-xs text-yellow-400">Processing...</p>
                             )}
+                            {failedAttempts > 0 && (
+                                <p className="text-xs text-red-400">Fails: {failedAttempts}</p>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -241,4 +324,82 @@ export default function SpaceManager() {
                                     : 'bg-gray-600 hover:bg-gray-700 text-white'
                             }`}
                         >
-                            {autoSummarizeEnabled ? '
+                            {autoSummarizeEnabled ? 'Enabled' : 'Disabled'}
+                        </button>
+                    </div>
+
+                    {failedAttempts > 0 && (
+                        <div className="bg-red-900/20 border border-red-500 rounded p-3">
+                            <p className="text-red-400 text-sm font-semibold">⚠️ Auto-Summarization Issues Detected</p>
+                            <p className="text-red-300 text-sm">Failed attempts: {failedAttempts}</p>
+                            <p className="text-red-300 text-sm">Last attempt: {lastFailedAttempt}</p>
+                            <button 
+                                onClick={resetFailures}
+                                className="mt-2 px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded"
+                            >
+                                Reset & Retry
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="text-sm text-medium-gray bg-primary p-4 rounded">
+                        <p><strong>Note:</strong> Empty transcripts and test recordings are automatically ignored.</p>
+                        <p>Only transcripts with meaningful content (20+ characters) are summarized.</p>
+                        <p className="mt-2">
+                            <strong>Stats:</strong> {stats.transcripts - stats.validTranscripts} transcript(s) skipped (empty/too short)
+                        </p>
+                        <p className="mt-1">
+                            <strong>Auto-check interval:</strong> Every 5 minutes (minimum 2 minutes between attempts)
+                        </p>
+                    </div>
+                </div>
+             </div>
+
+            {/* Real-time Data Table */}
+            <div className="p-6 bg-secondary rounded-lg">
+                 <h2 className="text-xl font-bold mb-4">Live Database View (Meetings)</h2>
+                 <div className="overflow-x-auto">
+                     <table className="min-w-full text-sm text-left text-light-gray">
+                        <thead className="text-xs text-medium-gray uppercase bg-primary">
+                            <tr>
+                                <th scope="col" className="px-6 py-3">Title</th>
+                                <th scope="col" className="px-6 py-3">Transcript ID</th>
+                                <th scope="col" className="px-6 py-3">Created At</th>
+                                <th scope="col" className="px-6 py-3">Summary Method</th>
+                                <th scope="col" className="px-6 py-3">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {meetings.map(meeting => (
+                                <tr key={meeting.id} className="bg-secondary border-b border-dark-gray">
+                                    <td className="px-6 py-4 font-medium whitespace-nowrap">{meeting.title}</td>
+                                    <td className="px-6 py-4 text-xs text-medium-gray">
+                                        {meeting.transcript_id ? meeting.transcript_id.substring(0, 8) + '...' : 'Manual'}
+                                    </td>
+                                    <td className="px-6 py-4">{new Date(meeting.created_at).toLocaleString()}</td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-2 py-1 rounded-full text-xs ${
+                                            meeting.transcript_id 
+                                                ? 'bg-green-800 text-green-200' 
+                                                : 'bg-blue-800 text-blue-200'
+                                        }`}>
+                                            {meeting.transcript_id ? 'Auto Generated' : 'Manual Entry'}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <button 
+                                            onClick={() => handleDelete(meeting.id)} 
+                                            className="font-medium text-red-500 hover:underline"
+                                        >
+                                            Delete
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                     </table>
+                 </div>
+            </div>
+        </div>
+    );
+}
