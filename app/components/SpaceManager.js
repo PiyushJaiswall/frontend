@@ -1,102 +1,176 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import toast from 'react-hot-toast';
 
 export default function SpaceManager() {
-    const [stats, setStats] = useState({ meetings: 0, transcripts: 0, unsummarized: 0 });
+    const [stats, setStats] = useState({ meetings: 0, transcripts: 0, validTranscripts: 0, unsummarized: 0 });
     const [meetings, setMeetings] = useState([]);
     const [autoSummarizeEnabled, setAutoSummarizeEnabled] = useState(true);
+    const [isSummarizing, setIsSummarizing] = useState(false);
+    const lastAutoSummarizeAttempt = useRef(0);
+    
+    // Function to check if transcript is valid (same logic as API)
+    const isValidTranscript = (transcript) => {
+        if (!transcript || !transcript.transcript_text) return false;
+        
+        const text = transcript.transcript_text.trim();
+        if (text.length === 0) return false;
+        if (text.length < 20) return false;
+        
+        const meaningfulContent = text.replace(/[\s\.,!?;:-]+/g, '');
+        if (meaningfulContent.length < 10) return false;
+        
+        const testPhrases = ['test', 'testing', 'hello test', 'mic test', 'one two three'];
+        const lowerText = text.toLowerCase();
+        const isJustTestPhrase = testPhrases.some(phrase => {
+            return lowerText === phrase || lowerText.replace(/[^a-z\s]/g, '').trim() === phrase;
+        });
+        
+        if (isJustTestPhrase && text.length < 50) return false;
+        
+        return true;
+    };
     
     async function fetchStats() {
-        const { count: meetingsCount } = await supabase.from('meetings').select('*', { count: 'exact', head: true });
-        const { count: transcriptsCount } = await supabase.from('transcripts').select('*', { count: 'exact', head: true });
-        
-        // Better query for unsummarized transcripts
-        const { data: allTranscripts } = await supabase.from('transcripts').select('id');
-        const { data: summarizedTranscripts } = await supabase
-            .from('meetings')
-            .select('transcript_id')
-            .not('transcript_id', 'is', null);
-        
-        const summarizedIds = new Set(summarizedTranscripts?.map(m => m.transcript_id) || []);
-        const unsummarizedCount = allTranscripts?.filter(t => !summarizedIds.has(t.id)).length || 0;
-        
-        setStats({ 
-            meetings: meetingsCount || 0, 
-            transcripts: transcriptsCount || 0,
-            unsummarized: unsummarizedCount
-        });
-    
-        // Auto-summarize if there are unsummarized transcripts and auto mode is enabled
-        if (autoSummarizeEnabled && unsummarizedCount > 0) {
-            console.log(`🤖 Auto-summarizing ${unsummarizedCount} transcripts...`);
-            toast(`Found ${unsummarizedCount} unsummarized transcript(s). Auto-summarizing...`, {
-                icon: '🤖',
-                duration: 3000,
+        try {
+            const { count: meetingsCount } = await supabase.from('meetings').select('*', { count: 'exact', head: true });
+            const { count: transcriptsCount } = await supabase.from('transcripts').select('*', { count: 'exact', head: true });
+            
+            // Get all transcripts and filter for valid ones
+            const { data: allTranscripts } = await supabase
+                .from('transcripts')
+                .select('id, transcript_text')
+                .not('transcript_text', 'is', null);
+            
+            const { data: summarizedTranscripts } = await supabase
+                .from('meetings')
+                .select('transcript_id')
+                .not('transcript_id', 'is', null);
+            
+            // Filter for valid transcripts only
+            const validTranscripts = allTranscripts?.filter(isValidTranscript) || [];
+            const summarizedIds = new Set(summarizedTranscripts?.map(m => m.transcript_id) || []);
+            const unsummarizedValidTranscripts = validTranscripts.filter(t => !summarizedIds.has(t.id));
+            
+            setStats({ 
+                meetings: meetingsCount || 0, 
+                transcripts: transcriptsCount || 0,
+                validTranscripts: validTranscripts.length,
+                unsummarized: unsummarizedValidTranscripts.length
             });
-            await triggerSummarize();
+
+            // Auto-summarize logic with proper safeguards
+            const now = Date.now();
+            const timeSinceLastAttempt = now - lastAutoSummarizeAttempt.current;
+            const shouldAutoSummarize = autoSummarizeEnabled && 
+                                      unsummarizedValidTranscripts.length > 0 && 
+                                      !isSummarizing &&
+                                      timeSinceLastAttempt > 30000;
+
+            if (shouldAutoSummarize) {
+                console.log(`🤖 Auto-summarizing ${unsummarizedValidTranscripts.length} valid transcripts...`);
+                lastAutoSummarizeAttempt.current = now;
+                await triggerSummarize();
+            }
+        } catch (error) {
+            console.error('Error fetching stats:', error);
+            toast.error('Failed to fetch statistics');
         }
     }
 
     async function fetchAllMeetings() {
-        const { data, error } = await supabase.from('meetings').select('*').order('created_at', { ascending: false });
-        if (data) setMeetings(data);
+        try {
+            const { data, error } = await supabase.from('meetings').select('*').order('created_at', { ascending: false });
+            if (error) throw error;
+            if (data) setMeetings(data);
+        } catch (error) {
+            console.error('Error fetching meetings:', error);
+        }
     }
     
     useEffect(() => {
         fetchStats();
         fetchAllMeetings();
 
-        // Set up real-time listener for transcript changes
         const channel = supabase
             .channel('db-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'transcripts' }, (payload) => {
-                toast.success('New transcript detected! Processing...', { icon: '📝' });
-                fetchStats();
+                console.log('Transcript change detected:', payload.eventType);
+                toast.success('New transcript detected!', { icon: '📝' });
+                lastAutoSummarizeAttempt.current = 0;
+                setTimeout(fetchStats, 1000);
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, (payload) => {
+                console.log('Meeting change detected:', payload.eventType);
                 toast.success('Database updated!', { icon: '💾' });
                 fetchStats();
                 fetchAllMeetings();
             })
             .subscribe();
 
-        // Check for new transcripts every 30 seconds
         const interval = setInterval(() => {
-            fetchStats();
-        }, 30000);
+            if (!isSummarizing) {
+                fetchStats();
+            }
+        }, 60000);
 
         return () => {
             supabase.removeChannel(channel);
             clearInterval(interval);
         };
-    }, [autoSummarizeEnabled]);
+    }, [autoSummarizeEnabled, isSummarizing]);
 
     const handleDelete = async (id) => {
         if (confirm('Are you sure you want to delete this meeting?')) {
-            const { error } = await supabase.from('meetings').delete().eq('id', id);
-            if (error) toast.error(error.message);
-            else toast.success('Meeting deleted.');
+            try {
+                const { error } = await supabase.from('meetings').delete().eq('id', id);
+                if (error) throw error;
+                toast.success('Meeting deleted.');
+            } catch (error) {
+                toast.error(error.message);
+            }
         }
     };
     
     const triggerSummarize = async () => {
-        const toastId = toast.loading('Summarizing transcripts using free algorithm...');
+        if (isSummarizing) {
+            toast.error('Summarization already in progress...');
+            return;
+        }
+
+        setIsSummarizing(true);
+        const toastId = toast.loading('Summarizing valid transcripts...');
+        
         try {
             const response = await fetch('/api/summarize', { method: 'POST' });
             const result = await response.json();
             
+            console.log('Summarization result:', result);
+            
             if (response.ok) {
-                toast.success(`Successfully summarized ${result.processedCount} transcript(s) using ${result.method} method.`, { id: toastId });
+                if (result.processedCount > 0) {
+                    toast.success(
+                        `Successfully summarized ${result.processedCount} transcript(s) using ${result.method || 'free'} method.`, 
+                        { id: toastId }
+                    );
+                } else {
+                    toast.info(
+                        result.message || 'No valid transcripts found to summarize.',
+                        { id: toastId }
+                    );
+                }
                 fetchStats();
                 fetchAllMeetings();
             } else {
                 toast.error(result.error || 'Summarization failed.', { id: toastId });
             }
         } catch (error) {
+            console.error('Summarization error:', error);
             toast.error('Failed to connect to summarization service.', { id: toastId });
+        } finally {
+            setIsSummarizing(false);
         }
     };
 
@@ -105,7 +179,7 @@ export default function SpaceManager() {
             {/* Storage Overview */}
             <div className="p-6 bg-secondary rounded-lg">
                 <h2 className="text-xl font-bold mb-4">Storage Overview</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                     <div className="p-4 bg-primary rounded-lg text-center">
                         <p className="text-medium-gray text-sm">Total Meetings</p>
                         <p className="text-2xl font-bold">{stats.meetings}</p>
@@ -115,6 +189,10 @@ export default function SpaceManager() {
                         <p className="text-2xl font-bold">{stats.transcripts}</p>
                     </div>
                     <div className="p-4 bg-primary rounded-lg text-center">
+                        <p className="text-medium-gray text-sm">Valid Transcripts</p>
+                        <p className="text-2xl font-bold text-blue-400">{stats.validTranscripts}</p>
+                    </div>
+                    <div className="p-4 bg-primary rounded-lg text-center">
                         <p className="text-medium-gray text-sm">Unsummarized</p>
                         <p className={`text-2xl font-bold ${stats.unsummarized > 0 ? 'text-red-400' : 'text-green-400'}`}>
                             {stats.unsummarized}
@@ -122,9 +200,14 @@ export default function SpaceManager() {
                     </div>
                     <div className="p-4 bg-primary rounded-lg text-center">
                         <p className="text-medium-gray text-sm">Auto Summary</p>
-                        <p className={`text-sm font-bold ${autoSummarizeEnabled ? 'text-green-400' : 'text-red-400'}`}>
-                            {autoSummarizeEnabled ? 'ON' : 'OFF'}
-                        </p>
+                        <div className="flex flex-col items-center">
+                            <p className={`text-sm font-bold ${autoSummarizeEnabled ? 'text-green-400' : 'text-red-400'}`}>
+                                {autoSummarizeEnabled ? 'ON' : 'OFF'}
+                            </p>
+                            {isSummarizing && (
+                                <p className="text-xs text-yellow-400">Processing...</p>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -135,9 +218,17 @@ export default function SpaceManager() {
                 <div className="space-y-4">
                     <button 
                         onClick={triggerSummarize}
-                        className="w-full px-4 py-2 font-bold text-white bg-accent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-accent"
+                        disabled={isSummarizing}
+                        className={`w-full px-4 py-2 font-bold text-white rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                            isSummarizing 
+                                ? 'bg-gray-600 cursor-not-allowed' 
+                                : 'bg-accent hover:bg-blue-700'
+                        }`}
                     >
-                        Summarize New Transcripts ({stats.unsummarized} pending)
+                        {isSummarizing 
+                            ? 'Summarizing...' 
+                            : `Summarize Valid Transcripts (${stats.unsummarized} pending)`
+                        }
                     </button>
                     
                     <div className="flex items-center justify-between">
@@ -150,44 +241,4 @@ export default function SpaceManager() {
                                     : 'bg-gray-600 hover:bg-gray-700 text-white'
                             }`}
                         >
-                            {autoSummarizeEnabled ? 'Enabled' : 'Disabled'}
-                        </button>
-                    </div>
-                </div>
-             </div>
-
-            {/* Real-time Data Table */}
-            <div className="p-6 bg-secondary rounded-lg">
-                 <h2 className="text-xl font-bold mb-4">Live Database View (Meetings)</h2>
-                 <div className="overflow-x-auto">
-                     <table className="min-w-full text-sm text-left text-light-gray">
-                        <thead className="text-xs text-medium-gray uppercase bg-primary">
-                            <tr>
-                                <th scope="col" className="px-6 py-3">Title</th>
-                                <th scope="col" className="px-6 py-3">Created At</th>
-                                <th scope="col" className="px-6 py-3">Summary Method</th>
-                                <th scope="col" className="px-6 py-3">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {meetings.map(meeting => (
-                                <tr key={meeting.id} className="bg-secondary border-b border-dark-gray">
-                                    <td className="px-6 py-4 font-medium whitespace-nowrap">{meeting.title}</td>
-                                    <td className="px-6 py-4">{new Date(meeting.created_at).toLocaleString()}</td>
-                                    <td className="px-6 py-4">
-                                        <span className="px-2 py-1 bg-green-800 text-green-200 rounded-full text-xs">
-                                            Free Algorithm
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <button onClick={() => handleDelete(meeting.id)} className="font-medium text-red-500 hover:underline">Delete</button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                     </table>
-                 </div>
-            </div>
-        </div>
-    );
-}
+                            {autoSummarizeEnabled ? '
