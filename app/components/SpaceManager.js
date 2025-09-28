@@ -13,22 +13,25 @@ export default function SpaceManager() {
         const { count: meetingsCount } = await supabase.from('meetings').select('*', { count: 'exact', head: true });
         const { count: transcriptsCount } = await supabase.from('transcripts').select('*', { count: 'exact', head: true });
         
-        // Count unsummarized transcripts
-        const { data: unsummarizedData, error } = await supabase
-            .from('transcripts')
-            .select('id')
-            .not('id', 'in', `(select transcript_id from meetings where transcript_id is not null)`);
+        // Better query for unsummarized transcripts
+        const { data: allTranscripts } = await supabase.from('transcripts').select('id');
+        const { data: summarizedTranscripts } = await supabase
+            .from('meetings')
+            .select('transcript_id')
+            .not('transcript_id', 'is', null);
         
-        const unsummarizedCount = unsummarizedData ? unsummarizedData.length : 0;
+        const summarizedIds = new Set(summarizedTranscripts?.map(m => m.transcript_id) || []);
+        const unsummarizedCount = allTranscripts?.filter(t => !summarizedIds.has(t.id)).length || 0;
         
         setStats({ 
             meetings: meetingsCount || 0, 
             transcripts: transcriptsCount || 0,
             unsummarized: unsummarizedCount
         });
-
+    
         // Auto-summarize if there are unsummarized transcripts and auto mode is enabled
         if (autoSummarizeEnabled && unsummarizedCount > 0) {
+            console.log(`🤖 Auto-summarizing ${unsummarizedCount} transcripts...`);
             toast(`Found ${unsummarizedCount} unsummarized transcript(s). Auto-summarizing...`, {
                 icon: '🤖',
                 duration: 3000,
