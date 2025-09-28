@@ -11,6 +11,7 @@ export default function MeetingDetails() {
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
+  const [showManualEntry, setShowManualEntry] = useState(false); // Add this state
 
   const fetchMeetings = async () => {
     setLoading(true);
@@ -62,11 +63,17 @@ export default function MeetingDetails() {
     setSelectedMeeting(null);
   };
   
-    const handleSave = async (updatedMeeting) => {
+  const handleCloseManualEntry = () => {
+    setShowManualEntry(false);
+  };
+  
+  // Fixed handleSave function - now refetches data after update
+  const handleSave = async (updatedMeeting) => {
     const { data, error } = await supabase
       .from('meetings')
       .update(updatedMeeting)
-      .eq('id', updatedMeeting.id);
+      .eq('id', updatedMeeting.id)
+      .select(); // Add .select() to get the updated data
 
     if (error) {
       toast.error('Failed to update meeting.');
@@ -74,6 +81,32 @@ export default function MeetingDetails() {
     } else {
       toast.success('Meeting updated successfully!');
       handleClosePopup();
+      fetchMeetings(); // Refetch meetings to update the cards
+    }
+  };
+
+  // New function for manual entry
+  const handleManualSave = async (newMeeting) => {
+    const { data, error } = await supabase
+      .from('meetings')
+      .insert([{
+        title: newMeeting.title,
+        summary: newMeeting.summary,
+        key_points: newMeeting.key_points,
+        followup_points: newMeeting.followup_points,
+        next_meet_schedule: newMeeting.next_meet_schedule,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }])
+      .select();
+
+    if (error) {
+      toast.error('Failed to create meeting.');
+      console.error(error);
+    } else {
+      toast.success('Meeting created successfully!');
+      handleCloseManualEntry();
+      fetchMeetings(); // Refetch meetings to show the new card
     }
   };
 
@@ -93,8 +126,11 @@ export default function MeetingDetails() {
           onChange={(e) => setDateFilter(e.target.value)}
           className="px-4 py-2 bg-secondary text-white border border-dark-gray rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
         />
-        {/* Manual Entry Button could trigger a popup similar to the edit one but with empty fields */}
-        <button className="px-4 py-2 font-semibold text-white bg-accent rounded-md hover:bg-blue-700">
+        {/* Fixed Manual Entry Button */}
+        <button 
+          onClick={() => setShowManualEntry(true)}
+          className="px-4 py-2 font-semibold text-white bg-accent rounded-md hover:bg-blue-700"
+        >
           Manual Entry
         </button>
       </div>
@@ -109,8 +145,31 @@ export default function MeetingDetails() {
         </div>
       )}
 
+      {/* Edit Meeting Popup */}
       {selectedMeeting && (
-        <MeetingPopup meeting={selectedMeeting} onClose={handleClosePopup} onSave={handleSave} />
+        <MeetingPopup 
+          meeting={selectedMeeting} 
+          onClose={handleClosePopup} 
+          onSave={handleSave}
+          isEditing={true}
+        />
+      )}
+
+      {/* Manual Entry Popup */}
+      {showManualEntry && (
+        <MeetingPopup 
+          meeting={{
+            title: '',
+            summary: '',
+            key_points: [],
+            followup_points: [],
+            next_meet_schedule: ''
+          }} 
+          onClose={handleCloseManualEntry} 
+          onSave={handleManualSave}
+          isEditing={false}
+          isManualEntry={true}
+        />
       )}
     </div>
   );
