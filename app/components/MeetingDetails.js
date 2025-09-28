@@ -84,6 +84,26 @@ export default function MeetingDetails() {
       fetchMeetings(); // Refetch meetings to update the cards
     }
   };
+  // Add this function to MeetingDetails.js
+  const tryBrowserSummarization = async (text) => {
+      if ('ai' in window && 'summarizer' in window.ai) {
+          try {
+              const summarizer = await window.ai.summarizer.create({
+                  type: 'key-points',
+                  format: 'markdown',
+                  length: 'medium'
+              });
+              
+              const summary = await summarizer.summarize(text);
+              summarizer.destroy();
+              return summary;
+          } catch (error) {
+              console.log('Browser AI not available:', error);
+              return null;
+          }
+      }
+      return null;
+  };
 
   // New function for manual entry
   const handleManualSave = async (newMeeting) => {
