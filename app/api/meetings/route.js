@@ -7,7 +7,6 @@ const supabase = createClient(
 
 export async function GET(request) {
   try {
-    // Updated query to join both tables and get complete data
     const { data, error } = await supabase
       .from('meetings')
       .select(`
@@ -22,10 +21,12 @@ export async function GET(request) {
 
     if (error) {
       console.error('Supabase error:', error)
-      return Response.json({ error: 'Failed to fetch meetings' }, { status: 500 })
+      return new Response(JSON.stringify({ error: 'Failed to fetch meetings' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      })
     }
 
-    // Transform data to match frontend expectations
     const transformedData = data.map(meeting => ({
       id: meeting.id,
       transcript_id: meeting.transcript_id,
@@ -36,17 +37,22 @@ export async function GET(request) {
       next_meet_schedule: meeting.next_meet_schedule,
       created_at: meeting.created_at,
       updated_at: meeting.updated_at,
-      // Include transcript data
       client_id: meeting.transcripts.client_id,
       transcript_text: meeting.transcripts.transcript_text,
       transcript_created_at: meeting.transcripts.transcript_created_at
     }))
 
-    return Response.json({ meetings: transformedData })
+    return new Response(JSON.stringify({ meetings: transformedData }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
 
   } catch (error) {
     console.error('API error:', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    })
   }
 }
 
@@ -55,7 +61,6 @@ export async function POST(request) {
     const body = await request.json()
     const { title, summary, key_points, followup_points, transcript_id } = body
 
-    // Insert into meetings table (transcript should already exist from backend)
     const { data, error } = await supabase
       .from('meetings')
       .insert({
@@ -69,13 +74,22 @@ export async function POST(request) {
 
     if (error) {
       console.error('Supabase error:', error)
-      return Response.json({ error: 'Failed to create meeting' }, { status: 500 })
+      return new Response(JSON.stringify({ error: 'Failed to create meeting' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      })
     }
 
-    return Response.json({ meeting: data[0] })
+    return new Response(JSON.stringify({ meeting: data[0] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
 
   } catch (error) {
     console.error('API error:', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    })
   }
 }
