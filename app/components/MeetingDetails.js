@@ -1,3 +1,4 @@
+'use client'
 import { useState } from 'react'
 import { formatDistanceToNow, format } from 'date-fns'
 
