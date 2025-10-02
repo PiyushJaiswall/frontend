@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 
-export default function MeetingCard({ meeting, onDelete, onView }) {
+export default function MeetingCard({ 
+  meeting, 
+  onDelete, 
+  onView, 
+  isSelected, 
+  onSelect, 
+  darkMode 
+}) {
   const [isDeleting, setIsDeleting] = useState(false)
 
   const handleDelete = async () => {
@@ -25,29 +32,43 @@ export default function MeetingCard({ meeting, onDelete, onView }) {
     setIsDeleting(false)
   }
 
-  // Format dates
   const createdAt = new Date(meeting.created_at)
   const transcriptDate = meeting.transcript_created_at 
     ? new Date(meeting.transcript_created_at) 
     : createdAt
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+    <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-all duration-200 ${
+      isSelected ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900' : ''
+    }`}>
+      {/* Selection Checkbox */}
       <div className="flex justify-between items-start mb-4">
-        <h3 className="text-lg font-semibold text-gray-800 line-clamp-1">
-          {meeting.title || 'Untitled Meeting'}
-        </h3>
-        <div className="flex space-x-2">
+        <div className="flex items-center space-x-3 flex-1">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => onSelect(meeting.id, e.target.checked)}
+            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <h3 
+            className="text-lg font-semibold text-gray-800 dark:text-white line-clamp-1 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+            onClick={() => onView(meeting)}
+          >
+            {meeting.title || 'Untitled Meeting'}
+          </h3>
+        </div>
+        
+        <div className="flex space-x-2 ml-2">
           <button
             onClick={() => onView(meeting)}
-            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium"
           >
             View
           </button>
           <button
             onClick={handleDelete}
             disabled={isDeleting}
-            className="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-50"
+            className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm font-medium disabled:opacity-50"
           >
             {isDeleting ? 'Deleting...' : 'Delete'}
           </button>
@@ -56,7 +77,7 @@ export default function MeetingCard({ meeting, onDelete, onView }) {
 
       {/* Summary */}
       <div className="mb-4">
-        <p className="text-gray-600 text-sm line-clamp-3">
+        <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-3">
           {meeting.summary || 'No summary available'}
         </p>
       </div>
@@ -64,15 +85,15 @@ export default function MeetingCard({ meeting, onDelete, onView }) {
       {/* Key Points */}
       {meeting.key_points && meeting.key_points.length > 0 && (
         <div className="mb-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Key Points:</h4>
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Key Points:</h4>
           <ul className="list-disc list-inside space-y-1">
             {meeting.key_points.slice(0, 3).map((point, index) => (
-              <li key={index} className="text-sm text-gray-600 line-clamp-1">
+              <li key={index} className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
                 {point}
               </li>
             ))}
             {meeting.key_points.length > 3 && (
-              <li className="text-sm text-gray-500 italic">
+              <li className="text-sm text-gray-500 dark:text-gray-500 italic">
                 +{meeting.key_points.length - 3} more points
               </li>
             )}
@@ -83,15 +104,15 @@ export default function MeetingCard({ meeting, onDelete, onView }) {
       {/* Follow-up Points */}
       {meeting.followup_points && meeting.followup_points.length > 0 && (
         <div className="mb-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Follow-ups:</h4>
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Follow-ups:</h4>
           <ul className="list-disc list-inside space-y-1">
             {meeting.followup_points.slice(0, 2).map((point, index) => (
-              <li key={index} className="text-sm text-orange-600 line-clamp-1">
+              <li key={index} className="text-sm text-orange-600 dark:text-orange-400 line-clamp-1">
                 {point}
               </li>
             ))}
             {meeting.followup_points.length > 2 && (
-              <li className="text-sm text-gray-500 italic">
+              <li className="text-sm text-gray-500 dark:text-gray-500 italic">
                 +{meeting.followup_points.length - 2} more follow-ups
               </li>
             )}
@@ -100,7 +121,7 @@ export default function MeetingCard({ meeting, onDelete, onView }) {
       )}
 
       {/* Metadata */}
-      <div className="flex justify-between items-center text-xs text-gray-500 border-t pt-3">
+      <div className="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400 border-t dark:border-gray-700 pt-3">
         <span>Client: {meeting.client_id}</span>
         <span>
           {formatDistanceToNow(transcriptDate, { addSuffix: true })}
