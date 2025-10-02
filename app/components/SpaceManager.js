@@ -1,405 +1,240 @@
-'use client';
+import { useState, useEffect } from 'react'
 
-import { useState, useEffect, useRef } from 'react';
-import { supabase } from '../../lib/supabaseClient';
-import toast from 'react-hot-toast';
+export default function SpaceManager({ meetings, onClose, darkMode }) {
+  const [spaceStats, setSpaceStats] = useState({
+    totalMeetings: 0,
+    totalSize: 0,
+    averageSize: 0,
+    transcriptSize: 0,
+    summarySize: 0
+  })
 
-export default function SpaceManager() {
-    const [stats, setStats] = useState({ meetings: 0, transcripts: 0, validTranscripts: 0, unsummarized: 0 });
-    const [meetings, setMeetings] = useState([]);
-    const [autoSummarizeEnabled, setAutoSummarizeEnabled] = useState(false); // CHANGED: Default to false
-    const [isSummarizing, setIsSummarizing] = useState(false);
-    const [lastFailedAttempt, setLastFailedAttempt] = useState(null);
-    const [failedAttempts, setFailedAttempts] = useState(0);
-    const lastAutoSummarizeAttempt = useRef(0);
-    const consecutiveFailures = useRef(0);
-    
-    // Function to check if transcript is valid (same logic as API)
-    const isValidTranscript = (transcript) => {
-        if (!transcript || !transcript.transcript_text) return false;
-        
-        const text = transcript.transcript_text.trim();
-        if (text.length === 0) return false;
-        if (text.length < 20) return false;
-        
-        const meaningfulContent = text.replace(/[\s\.,!?;:-]+/g, '');
-        if (meaningfulContent.length < 10) return false;
-        
-        const testPhrases = ['test', 'testing', 'hello test', 'mic test', 'one two three'];
-        const lowerText = text.toLowerCase();
-        const isJustTestPhrase = testPhrases.some(phrase => {
-            return lowerText === phrase || lowerText.replace(/[^a-z\s]/g, '').trim() === phrase;
-        });
-        
-        if (isJustTestPhrase && text.length < 50) return false;
-        
-        return true;
-    };
-    
-    async function fetchStats() {
-        try {
-            const { count: meetingsCount } = await supabase.from('meetings').select('*', { count: 'exact', head: true });
-            const { count: transcriptsCount } = await supabase.from('transcripts').select('*', { count: 'exact', head: true });
-            
-            // Get all transcripts and filter for valid ones
-            const { data: allTranscripts } = await supabase
-                .from('transcripts')
-                .select('id, transcript_text')
-                .not('transcript_text', 'is', null);
-            
-            const { data: summarizedTranscripts } = await supabase
-                .from('meetings')
-                .select('transcript_id')
-                .not('transcript_id', 'is', null);
-            
-            // Filter for valid transcripts only
-            const validTranscripts = allTranscripts?.filter(isValidTranscript) || [];
-            const summarizedIds = new Set(summarizedTranscripts?.map(m => m.transcript_id) || []);
-            const unsummarizedValidTranscripts = validTranscripts.filter(t => !summarizedIds.has(t.id));
-            
-            console.log('📊 Stats Update:', {
-                total: transcriptsCount,
-                valid: validTranscripts.length,
-                unsummarized: unsummarizedValidTranscripts.length,
-                consecutiveFailures: consecutiveFailures.current
-            });
-            
-            setStats({ 
-                meetings: meetingsCount || 0, 
-                transcripts: transcriptsCount || 0,
-                validTranscripts: validTranscripts.length,
-                unsummarized: unsummarizedValidTranscripts.length
-            });
+  useEffect(() => {
+    calculateSpaceStats()
+  }, [meetings])
 
-            // STRICT Auto-summarize logic with failure tracking
-            const now = Date.now();
-            const timeSinceLastAttempt = now - lastAutoSummarizeAttempt.current;
-            
-            // Don't auto-summarize if:
-            // 1. Auto-summarize is disabled
-            // 2. Currently summarizing
-            // 3. No unsummarized transcripts
-            // 4. Too soon since last attempt (less than 2 minutes)
-            // 5. Too many consecutive failures (more than 2)
-            const shouldAutoSummarize = autoSummarizeEnabled && 
-                                      !isSummarizing &&
-                                      unsummarizedValidTranscripts.length > 0 && 
-                                      timeSinceLastAttempt > 120000 && // 2 minutes instead of 30 seconds
-                                      consecutiveFailures.current < 3; // Stop after 3 failures
+  const calculateSpaceStats = () => {
+    let totalSize = 0
+    let transcriptSize = 0
+    let summarySize = 0
 
-            console.log('🤖 Auto-summarize check:', {
-                enabled: autoSummarizeEnabled,
-                summarizing: isSummarizing,
-                unsummarized: unsummarizedValidTranscripts.length,
-                timeSince: Math.round(timeSinceLastAttempt / 1000),
-                failures: consecutiveFailures.current,
-                shouldTrigger: shouldAutoSummarize
-            });
+    meetings.forEach(meeting => {
+      if (meeting.transcript_text) {
+        transcriptSize += meeting.transcript_text.length
+      }
+      if (meeting.summary) {
+        summarySize += meeting.summary.length
+      }
+      if (meeting.key_points) {
+        summarySize += JSON.stringify(meeting.key_points).length
+      }
+      if (meeting.followup_points) {
+        summarySize += JSON.stringify(meeting.followup_points).length
+      }
+    })
 
-            if (shouldAutoSummarize) {
-                console.log(`🤖 Auto-summarizing ${unsummarizedValidTranscripts.length} valid transcripts...`);
-                lastAutoSummarizeAttempt.current = now;
-                await triggerSummarize();
-            }
-        } catch (error) {
-            console.error('Error fetching stats:', error);
-            toast.error('Failed to fetch statistics');
-        }
-    }
+    totalSize = transcriptSize + summarySize
 
-    async function fetchAllMeetings() {
-        try {
-            const { data, error } = await supabase.from('meetings').select('*').order('created_at', { ascending: false });
-            if (error) throw error;
-            if (data) setMeetings(data);
-        } catch (error) {
-            console.error('Error fetching meetings:', error);
-        }
+    setSpaceStats({
+      totalMeetings: meetings.length,
+      totalSize: totalSize,
+      averageSize: meetings.length > 0 ? totalSize / meetings.length : 0,
+      transcriptSize: transcriptSize,
+      summarySize: summarySize
+    })
+  }
+
+  const formatBytes = (bytes) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
+  const downloadAllData = () => {
+    const allData = {
+      export_date: new Date().toISOString(),
+      total_meetings: meetings.length,
+      meetings: meetings.map(meeting => ({
+        id: meeting.id,
+        title: meeting.title,
+        summary: meeting.summary,
+        key_points: meeting.key_points,
+        followup_points: meeting.followup_points,
+        transcript: meeting.transcript_text,
+        created_at: meeting.created_at,
+        client_id: meeting.client_id,
+        transcript_created_at: meeting.transcript_created_at
+      }))
     }
     
-    useEffect(() => {
-        fetchStats();
-        fetchAllMeetings();
+    const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `meeting-backup-${new Date().toISOString().split('T')[0]}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
 
-        const channel = supabase
-            .channel('db-changes')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'transcripts' }, (payload) => {
-                console.log('New transcript inserted:', payload);
-                toast.success('New transcript detected!', { icon: '📝' });
-                // Reset failure counter on new transcript
-                consecutiveFailures.current = 0;
-                lastAutoSummarizeAttempt.current = 0;
-                setTimeout(fetchStats, 2000);
-            })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, (payload) => {
-                console.log('Meeting change detected:', payload.eventType);
-                if (payload.eventType === 'INSERT') {
-                    toast.success('New meeting summarized!', { icon: '✅' });
-                    // Reset failure counter on successful meeting creation
-                    consecutiveFailures.current = 0;
-                }
-                fetchStats();
-                fetchAllMeetings();
-            })
-            .subscribe();
-
-        // Check less frequently - every 5 minutes instead of 1 minute
-        const interval = setInterval(() => {
-            if (!isSummarizing) {
-                fetchStats();
-            }
-        }, 300000); // 5 minutes
-
-        return () => {
-            supabase.removeChannel(channel);
-            clearInterval(interval);
-        };
-    }, [autoSummarizeEnabled, isSummarizing]);
-
-    const handleDelete = async (id) => {
-        if (confirm('Are you sure you want to delete this meeting?')) {
-            try {
-                const { error } = await supabase.from('meetings').delete().eq('id', id);
-                if (error) throw error;
-                toast.success('Meeting deleted.');
-            } catch (error) {
-                toast.error(error.message);
-            }
-        }
-    };
+  const downloadCSV = () => {
+    const csvHeaders = ['Title', 'Summary', 'Key Points', 'Follow-ups', 'Created Date', 'Client ID']
+    const csvRows = meetings.map(meeting => [
+      `"${(meeting.title || '').replace(/"/g, '""')}"`,
+      `"${(meeting.summary || '').replace(/"/g, '""')}"`,
+      `"${(meeting.key_points || []).join('; ').replace(/"/g, '""')}"`,
+      `"${(meeting.followup_points || []).join('; ').replace(/"/g, '""')}"`,
+      `"${new Date(meeting.created_at).toLocaleDateString()}"`,
+      `"${meeting.client_id || ''}"`
+    ])
     
-    const triggerSummarize = async () => {
-        if (isSummarizing) {
-            toast.error('Summarization already in progress...');
-            return;
-        }
+    const csvContent = [csvHeaders.join(','), ...csvRows.map(row => row.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `meetings-export-${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
 
-        setIsSummarizing(true);
-        const toastId = toast.loading('Summarizing valid transcripts...');
-        
-        try {
-            const response = await fetch('/api/summarize', { method: 'POST' });
-            const result = await response.json();
-            
-            console.log('Summarization result:', result);
-            
-            if (response.ok) {
-                if (result.processedCount > 0) {
-                    // SUCCESS - reset failure counter
-                    consecutiveFailures.current = 0;
-                    setFailedAttempts(0);
-                    setLastFailedAttempt(null);
-                    
-                    toast.success(
-                        `Successfully summarized ${result.processedCount} transcript(s) using ${result.method || 'free'} method.`, 
-                        { id: toastId }
-                    );
-                } else {
-                    // NO TRANSCRIPTS PROCESSED - increment failure counter
-                    consecutiveFailures.current += 1;
-                    setFailedAttempts(prev => prev + 1);
-                    setLastFailedAttempt(new Date().toLocaleTimeString());
-                    
-                    toast.warning(
-                        result.message || 'No valid transcripts found to summarize.',
-                        { id: toastId }
-                    );
-                    
-                    // Auto-disable after 3 failures
-                    if (consecutiveFailures.current >= 3) {
-                        setAutoSummarizeEnabled(false);
-                        toast.error('Auto-summarization disabled due to repeated failures. Check your transcripts.');
-                    }
-                }
-                fetchStats();
-                fetchAllMeetings();
-            } else {
-                // API ERROR - increment failure counter
-                consecutiveFailures.current += 1;
-                setFailedAttempts(prev => prev + 1);
-                setLastFailedAttempt(new Date().toLocaleTimeString());
-                
-                toast.error(result.error || 'Summarization failed.', { id: toastId });
-                
-                // Auto-disable after 3 failures
-                if (consecutiveFailures.current >= 3) {
-                    setAutoSummarizeEnabled(false);
-                    toast.error('Auto-summarization disabled due to repeated failures.');
-                }
-            }
-        } catch (error) {
-            // NETWORK ERROR - increment failure counter
-            consecutiveFailures.current += 1;
-            setFailedAttempts(prev => prev + 1);
-            setLastFailedAttempt(new Date().toLocaleTimeString());
-            
-            console.error('Summarization error:', error);
-            toast.error('Failed to connect to summarization service.', { id: toastId });
-            
-            // Auto-disable after 3 failures
-            if (consecutiveFailures.current >= 3) {
-                setAutoSummarizeEnabled(false);
-                toast.error('Auto-summarization disabled due to connection issues.');
-            }
-        } finally {
-            setIsSummarizing(false);
-        }
-    };
+  const getStorageUsagePercentage = () => {
+    // Simulate storage limits (you can adjust based on your actual limits)
+    const totalLimit = 100 * 1024 * 1024 // 100MB limit
+    return Math.min((spaceStats.totalSize / totalLimit) * 100, 100)
+  }
 
-    const resetFailures = () => {
-        consecutiveFailures.current = 0;
-        setFailedAttempts(0);
-        setLastFailedAttempt(null);
-        lastAutoSummarizeAttempt.current = 0;
-        toast.success('Failure counter reset!');
-    };
+  const storagePercentage = getStorageUsagePercentage()
 
-    return (
-        <div className="space-y-8">
-            {/* Storage Overview */}
-            <div className="p-6 bg-secondary rounded-lg">
-                <h2 className="text-xl font-bold mb-4">Storage Overview</h2>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <div className="p-4 bg-primary rounded-lg text-center">
-                        <p className="text-medium-gray text-sm">Total Meetings</p>
-                        <p className="text-2xl font-bold">{stats.meetings}</p>
-                    </div>
-                    <div className="p-4 bg-primary rounded-lg text-center">
-                        <p className="text-medium-gray text-sm">Total Transcripts</p>
-                        <p className="text-2xl font-bold">{stats.transcripts}</p>
-                    </div>
-                    <div className="p-4 bg-primary rounded-lg text-center">
-                        <p className="text-medium-gray text-sm">Valid Transcripts</p>
-                        <p className="text-2xl font-bold text-blue-400">{stats.validTranscripts}</p>
-                    </div>
-                    <div className="p-4 bg-primary rounded-lg text-center">
-                        <p className="text-medium-gray text-sm">Unsummarized</p>
-                        <p className={`text-2xl font-bold ${stats.unsummarized > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                            {stats.unsummarized}
-                        </p>
-                    </div>
-                    <div className="p-4 bg-primary rounded-lg text-center">
-                        <p className="text-medium-gray text-sm">Auto Summary</p>
-                        <div className="flex flex-col items-center">
-                            <p className={`text-sm font-bold ${autoSummarizeEnabled ? 'text-green-400' : 'text-red-400'}`}>
-                                {autoSummarizeEnabled ? 'ON' : 'OFF'}
-                            </p>
-                            {isSummarizing && (
-                                <p className="text-xs text-yellow-400">Processing...</p>
-                            )}
-                            {failedAttempts > 0 && (
-                                <p className="text-xs text-red-400">Fails: {failedAttempts}</p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Actions */}
-             <div className="p-6 bg-secondary rounded-lg">
-                <h2 className="text-xl font-bold mb-4">Actions</h2>
-                <div className="space-y-4">
-                    <button 
-                        onClick={triggerSummarize}
-                        disabled={isSummarizing}
-                        className={`w-full px-4 py-2 font-bold text-white rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
-                            isSummarizing 
-                                ? 'bg-gray-600 cursor-not-allowed' 
-                                : 'bg-accent hover:bg-blue-700'
-                        }`}
-                    >
-                        {isSummarizing 
-                            ? 'Summarizing...' 
-                            : `Summarize Valid Transcripts (${stats.unsummarized} pending)`
-                        }
-                    </button>
-                    
-                    <div className="flex items-center justify-between">
-                        <span className="text-light-gray">Auto-Summarization:</span>
-                        <button 
-                            onClick={() => setAutoSummarizeEnabled(!autoSummarizeEnabled)}
-                            className={`px-4 py-2 rounded-md font-semibold transition-colors ${
-                                autoSummarizeEnabled 
-                                    ? 'bg-green-600 hover:bg-green-700 text-white' 
-                                    : 'bg-gray-600 hover:bg-gray-700 text-white'
-                            }`}
-                        >
-                            {autoSummarizeEnabled ? 'Enabled' : 'Disabled'}
-                        </button>
-                    </div>
-
-                    {failedAttempts > 0 && (
-                        <div className="bg-red-900/20 border border-red-500 rounded p-3">
-                            <p className="text-red-400 text-sm font-semibold">⚠️ Auto-Summarization Issues Detected</p>
-                            <p className="text-red-300 text-sm">Failed attempts: {failedAttempts}</p>
-                            <p className="text-red-300 text-sm">Last attempt: {lastFailedAttempt}</p>
-                            <button 
-                                onClick={resetFailures}
-                                className="mt-2 px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded"
-                            >
-                                Reset & Retry
-                            </button>
-                        </div>
-                    )}
-
-                    <div className="text-sm text-medium-gray bg-primary p-4 rounded">
-                        <p><strong>Note:</strong> Empty transcripts and test recordings are automatically ignored.</p>
-                        <p>Only transcripts with meaningful content (20+ characters) are summarized.</p>
-                        <p className="mt-2">
-                            <strong>Stats:</strong> {stats.transcripts - stats.validTranscripts} transcript(s) skipped (empty/too short)
-                        </p>
-                        <p className="mt-1">
-                            <strong>Auto-check interval:</strong> Every 5 minutes (minimum 2 minutes between attempts)
-                        </p>
-                    </div>
-                </div>
-             </div>
-
-            {/* Real-time Data Table */}
-            <div className="p-6 bg-secondary rounded-lg">
-                 <h2 className="text-xl font-bold mb-4">Live Database View (Meetings)</h2>
-                 <div className="overflow-x-auto">
-                     <table className="min-w-full text-sm text-left text-light-gray">
-                        <thead className="text-xs text-medium-gray uppercase bg-primary">
-                            <tr>
-                                <th scope="col" className="px-6 py-3">Title</th>
-                                <th scope="col" className="px-6 py-3">Transcript ID</th>
-                                <th scope="col" className="px-6 py-3">Created At</th>
-                                <th scope="col" className="px-6 py-3">Summary Method</th>
-                                <th scope="col" className="px-6 py-3">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {meetings.map(meeting => (
-                                <tr key={meeting.id} className="bg-secondary border-b border-dark-gray">
-                                    <td className="px-6 py-4 font-medium whitespace-nowrap">{meeting.title}</td>
-                                    <td className="px-6 py-4 text-xs text-medium-gray">
-                                        {meeting.transcript_id ? meeting.transcript_id.substring(0, 8) + '...' : 'Manual'}
-                                    </td>
-                                    <td className="px-6 py-4">{new Date(meeting.created_at).toLocaleString()}</td>
-                                    <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs ${
-                                            meeting.transcript_id 
-                                                ? 'bg-green-800 text-green-200' 
-                                                : 'bg-blue-800 text-blue-200'
-                                        }`}>
-                                            {meeting.transcript_id ? 'Auto Generated' : 'Manual Entry'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <button 
-                                            onClick={() => handleDelete(meeting.id)} 
-                                            className="font-medium text-red-500 hover:underline"
-                                        >
-                                            Delete
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                     </table>
-                 </div>
-            </div>
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden">
+        {/* Header */}
+        <div className="flex justify-between items-center p-6 border-b dark:border-gray-700">
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
+            Storage Management
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-xl"
+          >
+            ✕
+          </button>
         </div>
-    );
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {/* Storage Overview */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium text-gray-800 dark:text-white">Storage Overview</h3>
+            
+            {/* Progress Bar */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">Used Storage</span>
+                <span className="text-gray-800 dark:text-white font-medium">
+                  {formatBytes(spaceStats.totalSize)} / 100 MB
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                <div 
+                  className={`h-3 rounded-full transition-all duration-300 ${
+                    storagePercentage > 80 ? 'bg-red-500' : 
+                    storagePercentage > 60 ? 'bg-yellow-500' : 'bg-green-500'
+                  }`}
+                  style={{ width: `${storagePercentage}%` }}
+                ></div>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {storagePercentage.toFixed(1)}% used
+                {storagePercentage > 80 && (
+                  <span className="text-red-600 dark:text-red-400 ml-2">
+                    ⚠️ Storage almost full
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          {/* Statistics */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Meetings</h4>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {spaceStats.totalMeetings}
+              </p>
+            </div>
+            
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400">Average Size</h4>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {formatBytes(spaceStats.averageSize)}
+              </p>
+            </div>
+            
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400">Transcripts</h4>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {formatBytes(spaceStats.transcriptSize)}
+              </p>
+            </div>
+            
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400">Summaries</h4>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {formatBytes(spaceStats.summarySize)}
+              </p>
+            </div>
+          </div>
+
+          {/* Backup & Export Options */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium text-gray-800 dark:text-white">Data Backup & Export</h3>
+            
+            <div className="grid grid-cols-1 gap-3">
+              <button
+                onClick={downloadAllData}
+                className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <span>📦</span>
+                <span>Download Complete Backup (JSON)</span>
+              </button>
+              
+              <button
+                onClick={downloadCSV}
+                className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <span>📊</span>
+                <span>Export Summaries (CSV)</span>
+              </button>
+            </div>
+            
+            <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+              <p>• <strong>Complete Backup:</strong> All meeting data including transcripts</p>
+              <p>• <strong>CSV Export:</strong> Summaries only, suitable for spreadsheets</p>
+              <p>• Backup files can be imported back if needed</p>
+            </div>
+          </div>
+
+          {/* Storage Tips */}
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-400 mb-2">
+              💡 Storage Management Tips
+            </h4>
+            <ul className="text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
+              <li>• Delete old meetings you no longer need</li>
+              <li>• Download backups regularly to preserve data</li>
+              <li>• Use bulk delete for multiple meetings at once</li>
+              <li>• Consider keeping only summaries for very old meetings</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
