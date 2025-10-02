@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/supabaseClient'
 import MeetingCard from './components/MeetingCard'
 import MeetingDetails from './components/MeetingDetails'
 import SpaceManager from './components/SpaceManager'
