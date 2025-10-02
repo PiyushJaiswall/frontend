@@ -7,9 +7,8 @@ const supabase = createClient(
 
 export async function GET(request, { params }) {
   try {
-    const { id } = params
+    const id = params.id
 
-    // Get meeting with transcript data
     const { data, error } = await supabase
       .from('meetings')
       .select(`
@@ -27,10 +26,12 @@ export async function GET(request, { params }) {
 
     if (error) {
       console.error('Supabase error:', error)
-      return Response.json({ error: 'Meeting not found' }, { status: 404 })
+      return new Response(JSON.stringify({ error: 'Meeting not found' }), { 
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      })
     }
 
-    // Transform data
     const transformedData = {
       id: data.id,
       transcript_id: data.transcript_id,
@@ -41,7 +42,6 @@ export async function GET(request, { params }) {
       next_meet_schedule: data.next_meet_schedule,
       created_at: data.created_at,
       updated_at: data.updated_at,
-      // Include transcript data
       client_id: data.transcripts.client_id,
       meeting_title: data.transcripts.meeting_title,
       audio_url: data.transcripts.audio_url,
@@ -49,17 +49,23 @@ export async function GET(request, { params }) {
       transcript_created_at: data.transcripts.transcript_created_at
     }
 
-    return Response.json({ meeting: transformedData })
+    return new Response(JSON.stringify({ meeting: transformedData }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
 
   } catch (error) {
     console.error('API error:', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    })
   }
 }
 
 export async function PUT(request, { params }) {
   try {
-    const { id } = params
+    const id = params.id
     const body = await request.json()
     const { title, summary, key_points, followup_points, next_meet_schedule } = body
 
@@ -77,22 +83,30 @@ export async function PUT(request, { params }) {
 
     if (error) {
       console.error('Supabase error:', error)
-      return Response.json({ error: 'Failed to update meeting' }, { status: 500 })
+      return new Response(JSON.stringify({ error: 'Failed to update meeting' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      })
     }
 
-    return Response.json({ meeting: data[0] })
+    return new Response(JSON.stringify({ meeting: data[0] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
 
   } catch (error) {
     console.error('API error:', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    })
   }
 }
 
 export async function DELETE(request, { params }) {
   try {
-    const { id } = params
+    const id = params.id
 
-    // Delete meeting (transcript will remain for audit purposes)
     const { error } = await supabase
       .from('meetings')
       .delete()
@@ -100,13 +114,22 @@ export async function DELETE(request, { params }) {
 
     if (error) {
       console.error('Supabase error:', error)
-      return Response.json({ error: 'Failed to delete meeting' }, { status: 500 })
+      return new Response(JSON.stringify({ error: 'Failed to delete meeting' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      })
     }
 
-    return Response.json({ message: 'Meeting deleted successfully' })
+    return new Response(JSON.stringify({ message: 'Meeting deleted successfully' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
 
   } catch (error) {
     console.error('API error:', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    })
   }
 }
