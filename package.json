@@ -16,7 +16,8 @@
     "react": "^18",
     "react-dom": "^18",
     "react-hot-toast": "^2.4.1",
-    "react-tabs": "^6.0.2"
+    "react-tabs": "^6.0.2",
+    "date-fns": "^2.30.0"
   },
   "devDependencies": {
     "autoprefixer": "^10.0.1",
