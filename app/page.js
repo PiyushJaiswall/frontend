@@ -518,6 +518,8 @@ export default function Home() {
           meetings={meetings}
           onClose={() => setShowSpaceManager(false)}
           darkMode={darkMode}
+          dateFilter={dateFilter}
+          customDateRange={customDateRange}
         />
       )}
 
