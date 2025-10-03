@@ -173,12 +173,13 @@ export default function SpaceManager({ meetings, onClose, darkMode, dateFilter, 
             
             {/* Progress Bar */}
             <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">Used Storage</span>
-                <span className="text-gray-800 dark:text-white font-medium">
-                  {formatBytes(spaceStats.totalSize)} / 100 MB
-                </span>
-              </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600 dark:text-gray-400">Used Storage</span>
+              <span className="text-gray-800 dark:text-white font-medium">
+                {formatBytes(spaceStats.totalSize)} / 750 MB
+              </span>
+            </div>
+
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                 <div 
                   className={`h-3 rounded-full transition-all duration-300 ${
