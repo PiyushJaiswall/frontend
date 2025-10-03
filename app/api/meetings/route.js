@@ -60,43 +60,37 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const body = await request.json()
-    const { title, summary, key_points, followup_points, transcript_id, client_id } = body
+    const { title, summary, key_points, followup_points, transcript_id } = body
 
-    // Validation: require title and client_id
-    if (!title || !client_id) {
-      return new Response(JSON.stringify({ error: 'Title and Client ID are required.' }), {
+    // Validation
+    if (!title) {
+      return new Response(JSON.stringify({ error: 'Title is required.' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+    if (!transcript_id) {
+      return new Response(JSON.stringify({ error: 'Transcript ID is required.' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       })
     }
 
-    // Validation: key_points and followup_points should be arrays
-    let kp = Array.isArray(key_points) ? key_points : (key_points ? [key_points] : []);
-    let fp = Array.isArray(followup_points) ? followup_points : (followup_points ? [followup_points] : []);
-
+    // Insert without client_id as column doesn't exist in 'meetings'
     const { data, error } = await supabase
       .from('meetings')
-      .insert([{
+      .insert({
         transcript_id,
         title,
         summary,
-        key_points: kp,
-        followup_points: fp,
-        client_id
-      }])
+        key_points,
+        followup_points
+      })
       .select()
 
     if (error) {
       console.error('Supabase error:', error)
       return new Response(JSON.stringify({ error: error.message || 'Failed to create meeting' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      })
-    }
-
-    if (!data || !data[0]) {
-      // Defensive: insert succeeded but no data returned
-      return new Response(JSON.stringify({ error: 'Meeting was not saved. Please check your data.' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       })
@@ -108,9 +102,10 @@ export async function POST(request) {
     })
   } catch (error) {
     console.error('API error:', error)
-    return new Response(JSON.stringify({ error: error.message || 'Internal server error' }), {
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     })
   }
 }
+
