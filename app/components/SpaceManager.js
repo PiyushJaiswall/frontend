@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 
-export default function SpaceManager({ meetings, onClose, darkMode }) {
+export default function SpaceManager({ meetings, onClose, darkMode, dateFilter, customDateRange }) {
   const [spaceStats, setSpaceStats] = useState({
     totalMeetings: 0,
     totalSize: 0,
@@ -14,6 +14,39 @@ export default function SpaceManager({ meetings, onClose, darkMode }) {
     calculateSpaceStats()
   }, [meetings])
 
+    const getFilteredMeetings = () => {
+      if (dateFilter === 'all') return meetings;
+  
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+  
+      if (dateFilter === 'custom' && customDateRange.start && customDateRange.end) {
+        const startDate = new Date(customDateRange.start);
+        const endDate = new Date(customDateRange.end);
+        endDate.setHours(23, 59, 59, 999); // Include entire final day
+  
+        return meetings.filter(meeting => {
+          const meetingDate = new Date(meeting.created_at);
+          return meetingDate >= startDate && meetingDate <= endDate;
+        });
+      }
+  
+      return meetings.filter(meeting => {
+        const meetingDate = new Date(meeting.created_at);
+        switch (dateFilter) {
+          case 'today':
+            return meetingDate >= today;
+          case 'week':
+            return meetingDate >= weekAgo;
+          case 'month':
+            return meetingDate >= monthAgo;
+          default:
+            return true;
+        }
+      });
+      
   const calculateSpaceStats = () => {
     let totalSize = 0
     let transcriptSize = 0
@@ -82,27 +115,30 @@ export default function SpaceManager({ meetings, onClose, darkMode }) {
   }
 
   const downloadCSV = () => {
-    const csvHeaders = ['Title', 'Summary', 'Key Points', 'Follow-ups', 'Created Date', 'Client ID']
-    const csvRows = meetings.map(meeting => [
+    const filtered = getFilteredMeetings();
+  
+    const csvHeaders = ['Title', 'Summary', 'Key Points', 'Follow-ups', 'Created Date', 'Client ID'];
+    const csvRows = filtered.map(meeting => [
       `"${(meeting.title || '').replace(/"/g, '""')}"`,
       `"${(meeting.summary || '').replace(/"/g, '""')}"`,
       `"${(meeting.key_points || []).join('; ').replace(/"/g, '""')}"`,
       `"${(meeting.followup_points || []).join('; ').replace(/"/g, '""')}"`,
       `"${new Date(meeting.created_at).toLocaleDateString()}"`,
       `"${meeting.client_id || ''}"`
-    ])
-    
-    const csvContent = [csvHeaders.join(','), ...csvRows.map(row => row.join(','))].join('\n')
-    const blob = new Blob([csvContent], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `meetings-export-${new Date().toISOString().split('T')[0]}.csv`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
+    ]);
+  
+    const csvContent = [csvHeaders.join(','), ...csvRows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `meetings-export-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
 
   const getStorageUsagePercentage = () => {
     // Simulate storage limits (you can adjust based on your actual limits)
