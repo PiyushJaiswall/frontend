@@ -46,7 +46,6 @@ export async function GET(request) {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     })
-
   } catch (error) {
     console.error('API error:', error)
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
@@ -59,7 +58,15 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const body = await request.json()
-    const { title, summary, key_points, followup_points, transcript_id } = body
+    const { title, summary, key_points, followup_points, transcript_id, client_id } = body
+
+    // Basic validation
+    if (!title || !client_id) {
+      return new Response(JSON.stringify({ error: 'Title and Client ID are required.' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
 
     const { data, error } = await supabase
       .from('meetings')
@@ -68,23 +75,23 @@ export async function POST(request) {
         title,
         summary,
         key_points,
-        followup_points
+        followup_points,
+        client_id
       })
       .select()
 
     if (error) {
       console.error('Supabase error:', error)
-      return new Response(JSON.stringify({ error: 'Failed to create meeting' }), {
+      return new Response(JSON.stringify({ error: error.message || 'Failed to create meeting' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       })
     }
 
     return new Response(JSON.stringify({ meeting: data[0] }), {
-      status: 200,
+      status: 201,
       headers: { 'Content-Type': 'application/json' }
     })
-
   } catch (error) {
     console.error('API error:', error)
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
