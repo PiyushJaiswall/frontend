@@ -19,6 +19,9 @@ export default function Home() {
   const [dateFilter, setDateFilter] = useState('all')
   const [darkMode, setDarkMode] = useState(false)
   const [bulkLoading, setBulkLoading] = useState(false)
+  const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
+  const [customDateEnabled, setCustomDateEnabled] = useState(false);
+
 
   // Initialize dark mode from localStorage
   useEffect(() => {
@@ -84,41 +87,51 @@ export default function Home() {
   }
 
   const filterMeetings = () => {
-    let filtered = meetings
-
+    let filtered = meetings;
+  
     // Search filter
     if (searchTerm) {
       filtered = filtered.filter(meeting =>
         meeting.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         meeting.summary?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         meeting.client_id?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+      );
     }
-
+  
     // Date filter
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
-    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
-
-    if (dateFilter !== 'all') {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+  
+    if (dateFilter === 'custom' && customDateRange.start && customDateRange.end) {
+      const startDate = new Date(customDateRange.start);
+      const endDate = new Date(customDateRange.end);
+      // Include entire end day
+      endDate.setHours(23, 59, 59, 999);
+  
       filtered = filtered.filter(meeting => {
-        const meetingDate = new Date(meeting.created_at)
+        const meetingDate = new Date(meeting.created_at);
+        return meetingDate >= startDate && meetingDate <= endDate;
+      });
+    } else if (dateFilter !== 'all') {
+      filtered = filtered.filter(meeting => {
+        const meetingDate = new Date(meeting.created_at);
         switch (dateFilter) {
           case 'today':
-            return meetingDate >= today
+            return meetingDate >= today;
           case 'week':
-            return meetingDate >= weekAgo
+            return meetingDate >= weekAgo;
           case 'month':
-            return meetingDate >= monthAgo
+            return meetingDate >= monthAgo;
           default:
-            return true
+            return true;
         }
-      })
+      });
     }
-
-    setFilteredMeetings(filtered)
-  }
+  
+    setFilteredMeetings(filtered);
+  };
 
   const handleLogin = async (email, password) => {
     try {
@@ -337,14 +350,35 @@ export default function Home() {
               {/* Date Filter */}
               <select
                 value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
+                onChange={(e) => {
+                  setDateFilter(e.target.value);
+                  setCustomDateEnabled(false); // disable custom range when selecting preset
+                }}
                 className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               >
                 <option value="all">All Time</option>
                 <option value="today">Today</option>
                 <option value="week">This Week</option>
                 <option value="month">This Month</option>
+                <option value="custom">Custom Range</option>
               </select>
+              
+              {dateFilter === 'custom' && (
+                <div className="flex space-x-2">
+                  <input
+                    type="date"
+                    value={customDateRange.start}
+                    onChange={(e) => setCustomDateRange(prev => ({ ...prev, start: e.target.value }))}
+                    className="px-2 py-1 border rounded dark:bg-gray-700 dark:text-white"
+                  />
+                  <input
+                    type="date"
+                    value={customDateRange.end}
+                    onChange={(e) => setCustomDateRange(prev => ({ ...prev, end: e.target.value }))}
+                    className="px-2 py-1 border rounded dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+              )}
 
               {/* Dark Mode Toggle */}
               <button
