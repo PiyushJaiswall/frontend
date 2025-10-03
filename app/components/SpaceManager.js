@@ -186,7 +186,7 @@ export default function SpaceManager({ meetings, onClose, darkMode, dateFilter, 
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 overflow-y-auto" style={{ maxHeight: '70vh' }}>
           {/* Storage Overview */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium text-gray-800 dark:text-white">Storage Overview</h3>
