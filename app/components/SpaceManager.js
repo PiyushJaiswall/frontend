@@ -46,6 +46,7 @@ export default function SpaceManager({ meetings, onClose, darkMode, dateFilter, 
             return true;
         }
       });
+    }
       
   const calculateSpaceStats = () => {
     let totalSize = 0
@@ -142,7 +143,7 @@ export default function SpaceManager({ meetings, onClose, darkMode, dateFilter, 
 
   const getStorageUsagePercentage = () => {
     // Simulate storage limits (you can adjust based on your actual limits)
-    const totalLimit = 100 * 1024 * 1024 // 100MB limit
+    const totalLimit = 750 * 1024 * 1024 // 750MB limit
     return Math.min((spaceStats.totalSize / totalLimit) * 100, 100)
   }
 
