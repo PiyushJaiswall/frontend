@@ -9,6 +9,11 @@ export default function SpaceManager({ meetings, onClose, darkMode, dateFilter, 
     transcriptSize: 0,
     summarySize: 0
   })
+  const [exportDateRange, setExportDateRange] = useState({
+    start: '',
+    end: ''
+  });
+
 
   useEffect(() => {
     calculateSpaceStats()
@@ -47,6 +52,17 @@ export default function SpaceManager({ meetings, onClose, darkMode, dateFilter, 
         }
       });
     }
+  const getExportFilteredMeetings = () => {
+    if (!exportDateRange.start || !exportDateRange.end) return meetings;
+    const startDate = new Date(exportDateRange.start);
+    const endDate = new Date(exportDateRange.end);
+    endDate.setHours(23, 59, 59, 999); // include full day
+    return meetings.filter(meeting => {
+      const meetingDate = new Date(meeting.created_at);
+      return meetingDate >= startDate && meetingDate <= endDate;
+    });
+  };
+
       
   const calculateSpaceStats = () => {
     let totalSize = 0
@@ -88,10 +104,11 @@ export default function SpaceManager({ meetings, onClose, darkMode, dateFilter, 
   }
 
   const downloadAllData = () => {
+    const exportMeetings = getExportFilteredMeetings(); // <-- Use filter!
     const allData = {
       export_date: new Date().toISOString(),
-      total_meetings: meetings.length,
-      meetings: meetings.map(meeting => ({
+      total_meetings: exportMeetings.length,
+      meetings: exportMeetings.map(meeting => ({
         id: meeting.id,
         title: meeting.title,
         summary: meeting.summary,
@@ -102,24 +119,28 @@ export default function SpaceManager({ meetings, onClose, darkMode, dateFilter, 
         client_id: meeting.client_id,
         transcript_created_at: meeting.transcript_created_at
       }))
-    }
-    
-    const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `meeting-backup-${new Date().toISOString().split('T')[0]}.json`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
+    };
+  
+    const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `meeting-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const downloadCSV = () => {
-    const filtered = getFilteredMeetings();
+    const exportMeetings = getExportFilteredMeetings(); // <-- Use filter!
+    if (!exportMeetings.length) {
+      alert('No meetings found for the selected range.');
+      return;
+    }
   
     const csvHeaders = ['Title', 'Summary', 'Key Points', 'Follow-ups', 'Created Date', 'Client ID'];
-    const csvRows = filtered.map(meeting => [
+    const csvRows = exportMeetings.map(meeting => [
       `"${(meeting.title || '').replace(/"/g, '""')}"`,
       `"${(meeting.summary || '').replace(/"/g, '""')}"`,
       `"${(meeting.key_points || []).join('; ').replace(/"/g, '""')}"`,
@@ -139,7 +160,6 @@ export default function SpaceManager({ meetings, onClose, darkMode, dateFilter, 
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
-
 
   const getStorageUsagePercentage = () => {
     // Simulate storage limits (you can adjust based on your actual limits)
@@ -234,7 +254,22 @@ export default function SpaceManager({ meetings, onClose, darkMode, dateFilter, 
           {/* Backup & Export Options */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium text-gray-800 dark:text-white">Data Backup & Export</h3>
-            
+            <div className="flex items-center space-x-2 mb-3">
+              <input
+                type="date"
+                value={exportDateRange.start}
+                onChange={e => setExportDateRange(prev => ({ ...prev, start: e.target.value }))}
+                className="px-2 py-1 border rounded dark:bg-gray-700 dark:text-white"
+              />
+              <span className="text-gray-700 dark:text-gray-200">to</span>
+              <input
+                type="date"
+                value={exportDateRange.end}
+                onChange={e => setExportDateRange(prev => ({ ...prev, end: e.target.value }))}
+                className="px-2 py-1 border rounded dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+                  
             <div className="grid grid-cols-1 gap-3">
               <button
                 onClick={downloadAllData}
