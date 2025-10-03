@@ -1,107 +1,122 @@
 'use client'
 import { useState } from 'react'
 
-export default function MeetingPopup({ onClose, onSave, darkMode }) {
+export default function MeetingForm({ onSave, onClose, darkMode }) {
   const [formData, setFormData] = useState({
+    client_id: '',
     title: '',
+    transcript_text: '',
     summary: '',
     key_points: [''],
     followup_points: [''],
-    transcript_text: ''
   })
+
   const [isSaving, setIsSaving] = useState(false)
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setIsSaving(true)
+  const saveMeeting = async () => {
+    const { client_id, title, transcript_text, summary, key_points, followup_points } = formData
 
+    if (!client_id.trim() || !title.trim()) {
+      alert('Client ID and Title are required')
+      return
+    }
+
+    setIsSaving(true)
     try {
-      // First create a transcript entry
-      const transcriptResponse = await fetch('/api/meetings', {
+      // 1. Create transcript
+      const transcriptRes = await fetch('/api/transcripts', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: formData.title,
-          summary: formData.summary,
-          key_points: formData.key_points.filter(point => point.trim()),
-          followup_points: formData.followup_points.filter(point => point.trim()),
-          transcript_id: crypto.randomUUID() // Generate a random ID for manual entries
+          client_id,
+          meeting_title: title,
+          audio_url: '',
+          transcript_text
         }),
       })
-
-      if (transcriptResponse.ok) {
-        const { meeting } = await transcriptResponse.json()
-        // Add the transcript text to the meeting object for display
-        const completeData = {
-          ...meeting,
-          transcript_text: formData.transcript_text,
-          client_id: 'manual_entry',
-          transcript_created_at: new Date().toISOString()
-        }
-        onSave(completeData)
-        alert('Meeting added successfully!')
-      } else {
-        throw new Error('Failed to save meeting')
+      const transcriptData = await transcriptRes.json()
+      const transcriptId = transcriptData.transcript?.id
+      if (!transcriptId) {
+        alert('Failed to create transcript: ' + (transcriptData.error || 'Unknown error'))
+        setIsSaving(false)
+        return
       }
+
+      // 2. Create meeting with new transcript_id
+      const meetingData = {
+        title,
+        summary,
+        key_points: key_points.filter(point => point.trim()),
+        followup_points: followup_points.filter(point => point.trim()),
+        transcript_id: transcriptId,
+      }
+      const meetingRes = await fetch('/api/meetings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(meetingData),
+      })
+      const meetingResp = await meetingRes.json()
+      if (!meetingRes.ok) {
+        alert('Failed to save meeting: ' + (meetingResp.error || 'Unknown error'))
+        setIsSaving(false)
+        return
+      }
+
+      alert('Meeting saved successfully!')
+      onSave()
     } catch (error) {
       console.error('Save error:', error)
       alert('Failed to save meeting: ' + error.message)
     }
-
     setIsSaving(false)
   }
 
+  const updateFormField = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
   const addKeyPoint = () => {
-    setFormData(prev => ({
-      ...prev,
-      key_points: [...prev.key_points, '']
-    }))
+    setFormData(prev => ({ ...prev, key_points: [...prev.key_points, ''] }))
   }
 
   const removeKeyPoint = (index) => {
     setFormData(prev => ({
       ...prev,
-      key_points: prev.key_points.filter((_, i) => i !== index)
+      key_points: prev.key_points.filter((_, i) => i !== index),
     }))
   }
 
   const updateKeyPoint = (index, value) => {
     setFormData(prev => ({
       ...prev,
-      key_points: prev.key_points.map((point, i) => i === index ? value : point)
+      key_points: prev.key_points.map((p, i) => (i === index ? value : p)),
     }))
   }
 
   const addFollowupPoint = () => {
-    setFormData(prev => ({
-      ...prev,
-      followup_points: [...prev.followup_points, '']
-    }))
+    setFormData(prev => ({ ...prev, followup_points: [...prev.followup_points, ''] }))
   }
 
   const removeFollowupPoint = (index) => {
     setFormData(prev => ({
       ...prev,
-      followup_points: prev.followup_points.filter((_, i) => i !== index)
+      followup_points: prev.followup_points.filter((_, i) => i !== index),
     }))
   }
 
   const updateFollowupPoint = (index, value) => {
     setFormData(prev => ({
       ...prev,
-      followup_points: prev.followup_points.map((point, i) => i === index ? value : point)
+      followup_points: prev.followup_points.map((p, i) => (i === index ? value : p)),
     }))
   }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white dark:bg-gray-800 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-hidden">
-        {/* Header */}
         <div className="flex justify-between items-center p-6 border-b dark:border-gray-700">
           <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
-            Add Meeting Manually
+            Add Meeting
           </h2>
           <button
             onClick={onClose}
@@ -111,38 +126,48 @@ export default function MeetingPopup({ onClose, onSave, darkMode }) {
           </button>
         </div>
 
-        {/* Content */}
-        <form onSubmit={handleSubmit} className="overflow-y-auto max-h-[calc(90vh-100px)]">
+        <div className="overflow-y-auto max-h-[calc(90vh-100px)]">
           <div className="p-6 space-y-6">
-            {/* Title */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Client ID *
+              </label>
+              <input
+                type="text"
+                value={formData.client_id}
+                onChange={(e) => updateFormField('client_id', e.target.value)}
+                className="w-full border dark:border-gray-600 rounded-lg px-3 py-2 dark:bg-gray-700 dark:text-white"
+                placeholder="Enter client ID"
+                required
+              />
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Meeting Title *
               </label>
               <input
                 type="text"
-                required
                 value={formData.title}
-                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                onChange={(e) => updateFormField('title', e.target.value)}
                 className="w-full border dark:border-gray-600 rounded-lg px-3 py-2 dark:bg-gray-700 dark:text-white"
                 placeholder="Enter meeting title"
+                required
               />
             </div>
 
-            {/* Summary */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Summary
               </label>
               <textarea
                 value={formData.summary}
-                onChange={(e) => setFormData(prev => ({ ...prev, summary: e.target.value }))}
+                onChange={(e) => updateFormField('summary', e.target.value)}
                 className="w-full border dark:border-gray-600 rounded-lg px-3 py-2 h-32 dark:bg-gray-700 dark:text-white"
                 placeholder="Enter meeting summary"
               />
             </div>
 
-            {/* Key Points */}
             <div>
               <div className="flex justify-between items-center mb-3">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -178,7 +203,6 @@ export default function MeetingPopup({ onClose, onSave, darkMode }) {
               </div>
             </div>
 
-            {/* Follow-up Points */}
             <div>
               <div className="flex justify-between items-center mb-3">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -214,38 +238,35 @@ export default function MeetingPopup({ onClose, onSave, darkMode }) {
               </div>
             </div>
 
-            {/* Full Transcript (Optional) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Full Transcript (Optional)
               </label>
               <textarea
                 value={formData.transcript_text}
-                onChange={(e) => setFormData(prev => ({ ...prev, transcript_text: e.target.value }))}
+                onChange={(e) => updateFormField('transcript_text', e.target.value)}
                 className="w-full border dark:border-gray-600 rounded-lg px-3 py-2 h-40 dark:bg-gray-700 dark:text-white"
                 placeholder="Paste or type the full meeting transcript here..."
               />
             </div>
           </div>
+        </div>
 
-          {/* Footer */}
-          <div className="flex justify-end space-x-3 p-6 border-t dark:border-gray-700">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving || !formData.title.trim()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSaving ? 'Saving...' : 'Save Meeting'}
-            </button>
-          </div>
-        </form>
+        <div className="flex justify-end space-x-3 p-6 border-t dark:border-gray-700">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={saveMeeting}
+            disabled={isSaving || !formData.title.trim() || !formData.client_id.trim()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSaving ? 'Saving...' : 'Save Meeting'}
+          </button>
+        </div>
       </div>
     </div>
   )
