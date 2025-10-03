@@ -16,6 +16,9 @@ export default function MeetingPopup({ onClose, onSave, darkMode }) {
     setIsSaving(true)
 
     try {
+      // Generate unique meeting ID here - UPDATED
+      const generatedMeetingId = crypto.randomUUID()
+
       // First create a transcript entry
       const transcriptResponse = await fetch('/api/meetings', {
         method: 'POST',
@@ -23,17 +26,18 @@ export default function MeetingPopup({ onClose, onSave, darkMode }) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          meeting_id: generatedMeetingId,   // <-- here is the update
           title: formData.title,
           summary: formData.summary,
           key_points: formData.key_points.filter(point => point.trim()),
           followup_points: formData.followup_points.filter(point => point.trim()),
-          transcript_id: crypto.randomUUID() // Generate a random ID for manual entries
+          transcript_id: crypto.randomUUID() // Keep generating transcript ID as before
         }),
       })
 
       if (transcriptResponse.ok) {
         const { meeting } = await transcriptResponse.json()
-        // Add the transcript text to the meeting object for display
+        // Add the transcript text and client_id for display
         const completeData = {
           ...meeting,
           transcript_text: formData.transcript_text,
@@ -205,7 +209,7 @@ export default function MeetingPopup({ onClose, onSave, darkMode }) {
                     <button
                       type="button"
                       onClick={() => removeFollowupPoint(index)}
-className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                      className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                     >
                       Remove
                     </button>
