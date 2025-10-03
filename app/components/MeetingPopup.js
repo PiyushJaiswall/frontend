@@ -16,32 +16,32 @@ export default function MeetingPopup({ onClose, onSave, darkMode }) {
     setIsSaving(true)
 
     try {
-      // Generate unique meeting ID here - UPDATED
-      const generatedMeetingId = crypto.randomUUID()
+      // Generate transcript ID each time for uniqueness
+      const generatedTranscriptId = crypto.randomUUID()
 
-      // First create a transcript entry
+      // POST request - only send fields backend expects!
+      // UPDATED: do not send meeting_id, let backend handle it.
       const transcriptResponse = await fetch('/api/meetings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          meeting_id: generatedMeetingId,   // <-- here is the update
           title: formData.title,
           summary: formData.summary,
           key_points: formData.key_points.filter(point => point.trim()),
           followup_points: formData.followup_points.filter(point => point.trim()),
-          transcript_id: crypto.randomUUID() // Keep generating transcript ID as before
+          transcript_id: generatedTranscriptId
         }),
       })
 
       if (transcriptResponse.ok) {
         const { meeting } = await transcriptResponse.json()
-        // Add the transcript text and client_id for display
+        // Add client_id/transcript for display (if needs to be shown in UI)
         const completeData = {
           ...meeting,
           transcript_text: formData.transcript_text,
-          client_id: 'manual_entry',
+          client_id: 'manual_entry', // Use static/client entry if needed
           transcript_created_at: new Date().toISOString()
         }
         onSave(completeData)
