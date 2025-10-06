@@ -5,7 +5,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 )
 
-// GET: fetch meetings
+// GET: fetch meetings (unchanged)
 export async function GET(request) {
   try {
     const { data, error } = await supabase
@@ -60,7 +60,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const body = await request.json()
-    const { title, summary, key_points, followup_points, transcript_id } = body
+    const { title, summary, key_points, followup_points, transcript_text = '' } = body
 
     // Validation
     if (!title) {
@@ -69,18 +69,34 @@ export async function POST(request) {
         headers: { 'Content-Type': 'application/json' }
       })
     }
-    if (!transcript_id) {
-      return new Response(JSON.stringify({ error: 'Transcript ID is required.' }), {
-        status: 400,
+
+    // Step 1: Create transcript record first
+    const { data: transcriptData, error: transcriptError } = await supabase
+      .from('transcripts')
+      .insert({
+        client_id: 'manual_entry', // Static identifier for manual entries
+        meeting_title: title,
+        audio_url: null, // No audio for manual entries
+        transcript_text: transcript_text || '', // Use provided transcript or empty string
+        transcript_created_at: new Date().toISOString()
+      })
+      .select()
+
+    if (transcriptError) {
+      console.error('Transcript creation error:', transcriptError)
+      return new Response(JSON.stringify({ error: transcriptError.message || 'Failed to create transcript' }), {
+        status: 500,
         headers: { 'Content-Type': 'application/json' }
       })
     }
 
-    // Insert without client_id as column doesn't exist in 'meetings'
-    const { data, error } = await supabase
+    const transcript = transcriptData[0]
+
+    // Step 2: Create meeting record with the transcript_id
+    const { data: meetingData, error: meetingError } = await supabase
       .from('meetings')
       .insert({
-        transcript_id,
+        transcript_id: transcript.id,
         title,
         summary,
         key_points,
@@ -88,15 +104,31 @@ export async function POST(request) {
       })
       .select()
 
-    if (error) {
-      console.error('Supabase error:', error)
-      return new Response(JSON.stringify({ error: error.message || 'Failed to create meeting' }), {
+    if (meetingError) {
+      console.error('Meeting creation error:', meetingError)
+      // Clean up: delete the transcript record if meeting creation fails
+      await supabase
+        .from('transcripts')
+        .delete()
+        .eq('id', transcript.id)
+      
+      return new Response(JSON.stringify({ error: meetingError.message || 'Failed to create meeting' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       })
     }
 
-    return new Response(JSON.stringify({ meeting: data[0] }), {
+    const meeting = meetingData[0]
+
+    // Return the complete meeting object with transcript data
+    const completeData = {
+      ...meeting,
+      client_id: transcript.client_id,
+      transcript_text: transcript.transcript_text,
+      transcript_created_at: transcript.transcript_created_at
+    }
+
+    return new Response(JSON.stringify({ meeting: completeData }), {
       status: 201,
       headers: { 'Content-Type': 'application/json' }
     })
@@ -108,4 +140,3 @@ export async function POST(request) {
     })
   }
 }
-
