@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation' 
 import { supabase } from '../lib/supabaseClient'
 import MeetingCard from './components/MeetingCard'
 import MeetingDetails from './components/MeetingDetails'
@@ -19,10 +20,14 @@ export default function Home() {
   const [dateFilter, setDateFilter] = useState('all')
   const [darkMode, setDarkMode] = useState(false)
   const [bulkLoading, setBulkLoading] = useState(false)
+  const searchParams = useSearchParams()
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const [customDateEnabled, setCustomDateEnabled] = useState(false);
 
-
+  useEffect(() => {
+    handleOAuthCallback()
+  }, [searchParams])
+  
   // Initialize dark mode from localStorage
   useEffect(() => {
     const savedDarkMode = localStorage.getItem('darkMode')
@@ -86,6 +91,54 @@ export default function Home() {
     }
   }
 
+  const handleOAuthCallback = async () => {
+    const authStatus = searchParams.get('auth')
+    const oauthEmail = searchParams.get('email')  // We'll pass this from backend
+    
+    if (authStatus === 'success' && oauthEmail) {
+      try {
+        // User logged in via Google OAuth on backend
+        // Now sync them to Supabase
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: oauthEmail,
+          password: oauthEmail // Use email as password for OAuth users
+        })
+        
+        if (error) {
+          // If user doesn't exist in Supabase, create them
+          const { error: signupError } = await supabase.auth.signUp({
+            email: oauthEmail,
+            password: oauthEmail,
+            options: {
+              data: {
+                provider: 'google_oauth'
+              }
+            }
+          })
+          
+          if (signupError) {
+            console.error('Failed to create OAuth user in Supabase:', signupError)
+            toast.error('Authentication failed')
+          } else {
+            toast.success('Welcome! Logged in with Google')
+          }
+        } else {
+          toast.success('Welcome back!')
+        }
+        
+        // Clean up URL
+        window.history.replaceState({}, '', '/')
+        
+      } catch (error) {
+        console.error('OAuth sync error:', error)
+        toast.error('Failed to sync authentication')
+      }
+    } else if (authStatus === 'error') {
+      toast.error('Google login failed. Please try again.')
+      window.history.replaceState({}, '', '/')
+    }
+  }
+  
   const filterMeetings = () => {
     let filtered = meetings;
   
