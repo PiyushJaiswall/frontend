@@ -6,6 +6,7 @@ import MeetingCard from './components/MeetingCard'
 import MeetingDetails from './components/MeetingDetails'
 import SpaceManager from './components/SpaceManager'
 import MeetingPopup from './components/MeetingPopup'
+import Login from './components/Login'
 
 export default function Home() {
   const [user, setUser] = useState(null)
@@ -305,73 +306,7 @@ export default function Home() {
   }
 
   if (!user) {
-    return (
-      <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
-        <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-lg shadow">
-          <div>
-            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
-              Meeting Dashboard
-            </h2>
-          </div>
-          <form className="space-y-6" onSubmit={(e) => {
-            e.preventDefault()
-            const formData = new FormData(e.target)
-            const email = formData.get('email')
-            const password = formData.get('password')
-            handleLogin(email, password)
-          }}>
-            <div>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                className="relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                placeholder="Email address"
-              />
-            </div>
-            <div>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                className="relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                placeholder="Password"
-              />
-            </div>
-            <div className="flex space-x-4">
-              <button
-                type="submit"
-                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const email = document.getElementById('email').value
-                  const password = document.getElementById('password').value
-                  if (email && password) handleSignUp(email, password)
-                }}
-                className="group relative w-full flex justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Sign Up
-              </button>
-            </div>
-          </form>
-          
-          <div className="flex justify-center">
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-            >
-              {darkMode ? '☀️' : '🌙'} {darkMode ? 'Light' : 'Dark'} Mode
-            </button>
-          </div>
-        </div>
-      </div>
-    )
+      return <Login />
   }
 
   return (
