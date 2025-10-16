@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
 
 export default function ExtensionStatus() {
     const [extensionConnected, setExtensionConnected] = useState(false);
