@@ -10,10 +10,6 @@ import MeetingDetails from './components/MeetingDetails'
 import SpaceManager from './components/SpaceManager'
 import MeetingPopup from './components/MeetingPopup'
 import Login from './components/Login'
-import { createClient } from '@supabase/supabase-js';
-import RealtimeStatus from './components/RealtimeStatus';
-import ExtensionStatus from './components/ExtensionStatus';
-
 
 export default function Home() {
   // All your state is preserved
@@ -33,138 +29,61 @@ export default function Home() {
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const [customDateEnabled, setCustomDateEnabled] = useState(false);
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  // --- START: MODIFIED AUTHENTICATION LOGIC ---
 
-  // Replace the authentication section in page.js
-  
-  // --- START MODIFIED AUTHENTICATION LOGIC ---
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://piyushjaiswall-backend.hf.space';
-  
+
   // This single useEffect now handles all session checking
   useEffect(() => {
-      const authStatus = searchParams.get('auth');
-      
-      if (authStatus === 'error') {
-          toast.error('Google login failed. Please try again.');
-      }
-      
-      // Clean the URL and check for a valid backend session
-      window.history.replaceState({}, '', window.location.pathname);
-      checkBackendSession();
+    const authStatus = searchParams.get('auth');
+    if (authStatus === 'error') {
+        toast.error('Google login failed. Please try again.');
+    }
+    // Clean the URL and check for a valid backend session
+    window.history.replaceState({}, '', '/');
+    checkBackendSession();
   }, [searchParams]);
-  
+
   const checkBackendSession = async () => {
-      setLoading(true);
-      try {
-          const res = await fetch(`${backendUrl}/auth/user`, {
-              credentials: 'include', // This is crucial for sending the session cookie
-          });
-          
-          if (res.ok) {
-              const usr = await res.json();
-              setUser(usr);
-              // We no longer need to sync with Supabase here, the backend is the source of truth
-          } else {
-              setUser(null);
-          }
-      } catch (e) {
-          console.error('Backend session check failed:', e);
-          setUser(null);
-      } finally {
-          setLoading(false);
+    setLoading(true);
+    try {
+      const res = await fetch(`${backendUrl}/auth/user`, {
+        credentials: 'include', // This is crucial for sending the session cookie
+      });
+      if (res.ok) {
+        const usr = await res.json();
+        setUser(usr);
+        // We no longer need to sync with Supabase here, the backend is the source of truth
+      } else {
+        setUser(null);
       }
+    } catch (e) {
+      console.error('Backend session check failed:', e);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
   };
-  
+
   // This is the new sign-out function that talks to your backend
   const handleSignOut = async () => {
-      try {
-          await fetch(`${backendUrl}/auth/logout`, {
-              method: 'POST',
-              credentials: 'include',
-          });
-          setUser(null);
-          setMeetings([]); // Keep your existing state resets
-          setSelectedMeetings(new Set());
-      } catch (error) {
-          console.error('Sign out error:', error);
-      }
+    try {
+      await fetch(`${backendUrl}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      setUser(null);
+      setMeetings([]); // Keep your existing state resets
+      setSelectedMeetings(new Set());
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
   };
-  // --- END MODIFIED AUTHENTICATION LOGIC ---
 
-  // Add this useEffect for realtime subscriptions
-  useEffect(() => {
-      if (!user) return;
-      
-      console.log('Setting up realtime subscriptions...');
-      
-      // Subscribe to new meetings
-      const meetingsChannel = supabase
-          .channel('meetings_changes')
-          .on(
-              'postgres_changes',
-              {
-                  event: 'INSERT',
-                  schema: 'public',
-                  table: 'meetings'
-              },
-              (payload) => {
-                  console.log('New meeting created:', payload);
-                  // Fetch updated meetings list
-                  fetchMeetings();
-                  
-                  // Show notification
-                  toast.success('New meeting transcription completed!');
-              }
-          )
-          .on(
-              'postgres_changes',
-              {
-                  event: 'UPDATE', 
-                  schema: 'public',
-                  table: 'meetings'
-              },
-              (payload) => {
-                  console.log('Meeting updated:', payload);
-                  // Update specific meeting in state
-                  const updatedMeeting = payload.new;
-                  setMeetings(prev => 
-                      prev.map(meeting => 
-                          meeting.id === updatedMeeting.id 
-                              ? { ...meeting, ...updatedMeeting }
-                              : meeting
-                      )
-                  );
-              }
-          )
-          .subscribe();
-      
-      // Subscribe to transcript updates (for processing status)
-      const transcriptsChannel = supabase
-          .channel('transcripts_changes')
-          .on(
-              'postgres_changes',
-              {
-                  event: 'INSERT',
-                  schema: 'public', 
-                  table: 'transcripts'
-              },
-              (payload) => {
-                  console.log('New transcript created:', payload);
-                  toast.success('Audio transcription in progress...');
-              }
-          )
-          .subscribe();
-      
-      // Cleanup subscriptions
-      return () => {
-          console.log('Cleaning up realtime subscriptions...');
-          supabase.removeChannel(meetingsChannel);
-          supabase.removeChannel(transcriptsChannel);
-      };
-  }, [user]);
+  // --- END: MODIFIED AUTHENTICATION LOGIC ---
+
+  // All your existing functionality is preserved below this line.
+
   // Initialize dark mode from localStorage
   useEffect(() => {
     const savedDarkMode = localStorage.getItem('darkMode')
@@ -173,7 +92,6 @@ export default function Home() {
     }
   }, [])
 
-  
   // Apply dark mode class
   useEffect(() => {
     if (darkMode) {
@@ -196,23 +114,20 @@ export default function Home() {
     filterMeetings()
   }, [meetings, searchTerm, dateFilter, customDateRange]) // Added customDateRange dependency
 
-  // Update fetchMeetings to use the API route (which proxies to backend)
   const fetchMeetings = async () => {
-      try {
-          // NOTE: This Next.js API route should be protected to only allow logged-in users.
-          const response = await fetch('/api/meetings', {
-              credentials: 'include' // Send cookies for authentication
-          });
-          const data = await response.json();
-          
-          if (response.ok) {
-              setMeetings(data.meetings);
-          } else {
-              console.error('Failed to fetch meetings:', data.error);
-          }
-      } catch (error) {
-          console.error('Error fetching meetings:', error);
+    try {
+      // NOTE: This Next.js API route should be protected to only allow logged-in users.
+      const response = await fetch('/api/meetings'); 
+      const data = await response.json();
+      
+      if (response.ok) {
+        setMeetings(data.meetings || []);
+      } else {
+        console.error('Failed to fetch meetings:', data.error);
       }
+    } catch (error) {
+      console.error('Error fetching meetings:', error);
+    }
   };
   
   const filterMeetings = () => {
@@ -360,7 +275,6 @@ export default function Home() {
                 {/* Changed to use user.name from backend session */}
                 Welcome back, {user.name || user.email}
               </p>
-              <RealtimeStatus user={user} />
             </div>
             
             <div className="flex items-center space-x-4">
@@ -440,36 +354,30 @@ export default function Home() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            {/* Existing stats cards */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Meetings</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">{meetings.length}</p>
-            </div>
-            
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">This Month</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                    {meetings.filter(m => {
-                        const meetingDate = new Date(m.created_at);
-                        const now = new Date();
-                        return meetingDate.getMonth() === now.getMonth() && 
-                               meetingDate.getFullYear() === now.getFullYear();
-                    }).length}
-                </p>
-            </div>
-            
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Follow-ups</p>
-                <p className="text-2xl font-semibold text-orange-600">
-                    {meetings.filter(m => m.followup_points && m.followup_points.length > 0).length}
-                </p>
-            </div>
-            
-            {/* New extension status card */}
-            <ExtensionStatus />
-        </div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Meetings</p>
+            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{meetings.length}</p>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <p className="text-sm font-medium text-gray-600 dark:text-gray-400">This Month</p>
+            <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+              {meetings.filter(m => {
+                const meetingDate = new Date(m.created_at)
+                const now = new Date()
+                return meetingDate.getMonth() === now.getMonth() && 
+                       meetingDate.getFullYear() === now.getFullYear()
+              }).length}
+            </p>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Follow-ups</p>
+            <p className="text-2xl font-semibold text-orange-600">
+              {meetings.filter(m => m.followup_points && m.followup_points.length > 0).length}
+            </p>
+          </div>
 
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <div className="space-y-3">
@@ -496,7 +404,7 @@ export default function Home() {
               )}
             </div>
           </div>
-
+        </div>
 
         {filteredMeetings.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
