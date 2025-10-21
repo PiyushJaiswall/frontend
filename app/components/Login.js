@@ -38,7 +38,7 @@ export default function Login() {
   const handleGoogleLogin = () => {
     setLoading(true);
     // Redirect to your backend OAuth endpoint
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://piyushjaiswall-backend.hf.space';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://piyushooo-backend.hf.space';
     window.location.href = `${backendUrl}/auth/google`;
   };
 
