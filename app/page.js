@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation' 
+import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabaseClient' // Keep for password auth if needed
 import toast from 'react-hot-toast'; // Make sure you have this installed
 
