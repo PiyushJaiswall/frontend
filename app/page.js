@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '../lib/supabaseClient' // Keep for password auth if needed
+import { supabase } from '../lib/supabaseClient'
 import toast from 'react-hot-toast'; // Make sure you have this installed
 
 // All your existing components are preserved
@@ -27,7 +27,6 @@ export default function Home() {
   const [dateFilter, setDateFilter] = useState('all')
   const [darkMode, setDarkMode] = useState(false)
   const [bulkLoading, setBulkLoading] = useState(false)
-  const searchParams = useSearchParams()
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const [customDateEnabled, setCustomDateEnabled] = useState(false);
 
