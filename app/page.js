@@ -16,7 +16,6 @@ export default function Home() {
   const router = useRouter();  // ✅ ADD THIS
   const [isLoading, setIsLoading] = useState(true);  // ✅ ADD THIS
   const [user, setUser] = useState(null);  // ✅ ADD THIS
-  const [user, setUser] = useState(null)
   const [meetings, setMeetings] = useState([])
   const [filteredMeetings, setFilteredMeetings] = useState([])
   const [loading, setLoading] = useState(true)
