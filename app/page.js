@@ -13,6 +13,9 @@ import Login from './components/Login'
 
 export default function Home() {
   // All your state is preserved
+  const router = useRouter();  // ✅ ADD THIS
+  const [isLoading, setIsLoading] = useState(true);  // ✅ ADD THIS
+  const [user, setUser] = useState(null);  // ✅ ADD THIS
   const [user, setUser] = useState(null)
   const [meetings, setMeetings] = useState([])
   const [filteredMeetings, setFilteredMeetings] = useState([])
@@ -33,6 +36,24 @@ export default function Home() {
 
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://piyushjaiswall-backend.hf.space';
 
+  useEffect(() => {
+    const checkAuth = () => {
+      const token = localStorage.getItem('meetingRecorderToken');
+      const userInfo = localStorage.getItem('userInfo');
+  
+      if (!token || !userInfo) {
+        // Not logged in - redirect to login
+        router.push('/login');
+        return;
+      }
+  
+      // Logged in - set user data
+      setUser(JSON.parse(userInfo));
+      setIsLoading(false);
+    };
+  
+    checkAuth();
+  }, []);
   // This single useEffect now handles all session checking
   useEffect(() => {
     const authStatus = searchParams.get('auth');
@@ -246,7 +267,16 @@ export default function Home() {
     setMeetings(prev => [newMeeting, ...prev]);
     setShowManualEntry(false);
   };
-
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
   // Your rendering logic is preserved
   if (loading) {
     return (
