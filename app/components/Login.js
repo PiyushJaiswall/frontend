@@ -35,7 +35,7 @@ export default function Login() {
         // Store token in localStorage
         localStorage.setItem('meetingRecorderToken', token);
         
-        // Decode JWT to get user info (without verification - just for display)
+        // Decode JWT to get user info
         const base64Url = token.split('.')[1];
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
         const jsonPayload = decodeURIComponent(
@@ -55,9 +55,6 @@ export default function Login() {
         // Store user info
         localStorage.setItem('userInfo', JSON.stringify(userInfo));
         
-        // ✅ Send token to Chrome extension (if installed)
-        sendTokenToExtension(token, userInfo);
-        
         console.log('✅ Authentication successful');
         
         // Redirect to dashboard
@@ -73,38 +70,6 @@ export default function Login() {
     }
   };
 
-  // ✅ Send authentication token to Chrome extension
-  const sendTokenToExtension = (token, userInfo) => {
-    try {
-      // Check if Chrome extension API is available
-      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-        // Replace with your actual extension ID
-        const extensionId = process.env.NEXT_PUBLIC_EXTENSION_ID;
-        
-        if (extensionId) {
-          chrome.runtime.sendMessage(
-            extensionId,
-            {
-              type: 'SET_AUTH_TOKEN',
-              token: token,
-              userInfo: userInfo
-            },
-            (response) => {
-              if (chrome.runtime.lastError) {
-                console.log('Extension not installed or not responding');
-              } else if (response?.success) {
-                console.log('✅ Token sent to extension successfully');
-              }
-            }
-          );
-        }
-      }
-    } catch (error) {
-      // Extension not installed - this is OK
-      console.log('Extension communication not available:', error.message);
-    }
-  };
-
   // ✅ Google OAuth login
   const handleGoogleLogin = () => {
     setLoading(true);
@@ -114,14 +79,13 @@ export default function Login() {
     window.location.href = `${backendUrl}/auth/google`;
   };
 
-  // Email/password login (using Supabase or your custom auth)
+  // Email/password login
   const handleEmailLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
-      // ✅ Call your backend login endpoint
       const response = await fetch(`${backendUrl}/auth/login`, {
         method: 'POST',
         headers: {
@@ -141,9 +105,6 @@ export default function Login() {
       localStorage.setItem('meetingRecorderToken', data.access_token);
       localStorage.setItem('userInfo', JSON.stringify(data.user));
       
-      // Send to extension
-      sendTokenToExtension(data.access_token, data.user);
-      
       // Redirect to dashboard
       router.push('/');
 
@@ -162,7 +123,6 @@ export default function Login() {
     setError('');
 
     try {
-      // ✅ Call your backend signup endpoint
       const response = await fetch(`${backendUrl}/auth/signup`, {
         method: 'POST',
         headers: {
@@ -176,7 +136,7 @@ export default function Login() {
         throw new Error(errorData.detail || 'Signup failed');
       }
 
-      alert('Account created successfully! Please check your email for verification.');
+      alert('Account created successfully! Please login.');
       setIsSignup(false);
 
     } catch (error) {
@@ -213,14 +173,13 @@ export default function Login() {
           </div>
         )}
 
-        {/* ✅ Google Sign In Button (Primary) */}
+        {/* Google Sign In Button */}
         <div>
           <button
             onClick={handleGoogleLogin}
             disabled={loading}
             className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
           >
-            {/* Google Logo SVG */}
             <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
