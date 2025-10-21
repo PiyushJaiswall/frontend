@@ -35,69 +35,35 @@ export default function Home() {
 
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://piyushjaiswall-backend.hf.space';
 
+// ✅ Authentication check - uses localStorage JWT token
   useEffect(() => {
-    const checkAuth = () => {
-      const token = localStorage.getItem('meetingRecorderToken');
-      const userInfo = localStorage.getItem('userInfo');
+    const token = localStorage.getItem('meetingRecorderToken');
+    const userInfo = localStorage.getItem('userInfo');
   
-      if (!token || !userInfo) {
-        // Not logged in - redirect to login
-        router.push('/login');
-        return;
-      }
-  
-      // Logged in - set user data
-      setUser(JSON.parse(userInfo));
-      setIsLoading(false);
-    };
-  
-    checkAuth();
-  }, []);
-  // This single useEffect now handles all session checking
-  useEffect(() => {
-    const authStatus = searchParams.get('auth');
-    if (authStatus === 'error') {
-        toast.error('Google login failed. Please try again.');
+    if (!token || !userInfo) {
+      // Not logged in - redirect to login
+      router.push('/login');
+      return;
     }
-    // Clean the URL and check for a valid backend session
-    window.history.replaceState({}, '', '/');
-    checkBackendSession();
-  }, [searchParams]);
+  
+    // Logged in - set user data
+    setUser(JSON.parse(userInfo));
+    setIsLoading(false);
+  }, [router]);
 
-  const checkBackendSession = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${backendUrl}/auth/user`, {
-        credentials: 'include', // This is crucial for sending the session cookie
-      });
-      if (res.ok) {
-        const usr = await res.json();
-        setUser(usr);
-        // We no longer need to sync with Supabase here, the backend is the source of truth
-      } else {
-        setUser(null);
-      }
-    } catch (e) {
-      console.error('Backend session check failed:', e);
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // This is the new sign-out function that talks to your backend
-  const handleSignOut = async () => {
-    try {
-      await fetch(`${backendUrl}/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      setUser(null);
-      setMeetings([]); // Keep your existing state resets
-      setSelectedMeetings(new Set());
-    } catch (error) {
-      console.error('Sign out error:', error);
-    }
+  // This isthe new sign-out function that talks to your backend
+  const handleSignOut = () => {
+    // Clear local storage
+    localStorage.removeItem('meetingRecorderToken');
+    localStorage.removeItem('userInfo');
+    
+    // Clear state
+    setUser(null);
+    setMeetings([]);
+    setSelectedMeetings(new Set());
+    
+    // Redirect to login
+    router.push('/login');
   };
 
   // --- END: MODIFIED AUTHENTICATION LOGIC ---
