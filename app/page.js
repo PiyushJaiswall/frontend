@@ -18,7 +18,7 @@ export default function Home() {
   const [user, setUser] = useState(null);  // ✅ ADD THIS
   const [meetings, setMeetings] = useState([])
   const [filteredMeetings, setFilteredMeetings] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [selectedMeeting, setSelectedMeeting] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedMeetings, setSelectedMeetings] = useState(new Set())
