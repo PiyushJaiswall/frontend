@@ -60,11 +60,6 @@ export default function Home() {
   
     checkAuth();
   }, []);
-  
-    // Logged in - set user data
-    setUser(JSON.parse(userInfo));
-    setIsLoading(false);
-  }, [router]);
 
   // This isthe new sign-out function that talks to your backend
   const handleSignOut = () => {
