@@ -36,14 +36,30 @@ export default function Home() {
 
 // ✅ Authentication check - uses localStorage JWT token
   useEffect(() => {
-    const token = localStorage.getItem('meetingRecorderToken');
-    const userInfo = localStorage.getItem('userInfo');
+    // Check authentication on client side only
+    const checkAuth = async () => {
+      try {
+        const token = localStorage.getItem('meetingRecorderToken');
+        const userInfo = localStorage.getItem('userInfo');
   
-    if (!token || !userInfo) {
-      // Not logged in - redirect to login
-      router.push('/login');
-      return;
-    }
+        if (!token || !userInfo) {
+          // Not logged in - redirect to login
+          window.location.href = '/login';  // ✅ Use window.location instead of router.push
+          return;
+        }
+  
+        // Logged in - set user data
+        setUser(JSON.parse(userInfo));
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        window.location.href = '/login';
+      } finally {
+        setIsLoading(false);
+      }
+    };
+  
+    checkAuth();
+  }, []);
   
     // Logged in - set user data
     setUser(JSON.parse(userInfo));
