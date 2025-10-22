@@ -10,6 +10,7 @@ import MeetingDetails from './components/MeetingDetails'
 import SpaceManager from './components/SpaceManager'
 import MeetingPopup from './components/MeetingPopup'
 import Login from './components/Login'
+import NextMeetingCard from './components/NextMeetingCard';
 
 export default function Home() {
   // All your state is preserved
@@ -381,7 +382,11 @@ export default function Home() {
               {meetings.filter(m => m.followup_points && m.followup_points.length > 0).length}
             </p>
           </div>
-
+              
+          <div className="mb-8">
+            <NextMeetingCard />
+          </div>
+              
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <div className="space-y-3">
               <div className="flex items-center space-x-2">
