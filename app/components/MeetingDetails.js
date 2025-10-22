@@ -1,6 +1,8 @@
 'use client'
 import { useState } from 'react'
 import { formatDistanceToNow, format } from 'date-fns'
+import { Calendar } from 'lucide-react'
+import ScheduleFollowup from './ScheduleFollowup'
 
 export default function MeetingDetails({ meeting, onClose, onUpdate, darkMode }) {
   const [isEditing, setIsEditing] = useState(false)
@@ -11,7 +13,8 @@ export default function MeetingDetails({ meeting, onClose, onUpdate, darkMode })
     followup_points: meeting.followup_points || [],
   })
   const [isSaving, setIsSaving] = useState(false)
-
+  const [showSchedule, setShowSchedule] = useState(false)
+  
   const handleSave = async () => {
     setIsSaving(true)
     try {
@@ -131,6 +134,14 @@ export default function MeetingDetails({ meeting, onClose, onUpdate, darkMode })
           </div>
           
           <div className="flex space-x-2">
+            <button
+              onClick={() => setShowSchedule(true)}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded flex items-center gap-2 transition-colors"
+            >
+              <Calendar className="w-4 h-4" />
+              Schedule
+            </button>
+
             <button
               onClick={downloadMeeting}
               className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
@@ -316,6 +327,16 @@ export default function MeetingDetails({ meeting, onClose, onUpdate, darkMode })
           </div>
         </div>
       </div>
+
+      {/* Schedule Follow-up Modal */}
+      {showSchedule && (
+        <ScheduleFollowup
+          meetingId={meeting.id}
+          meetingTitle={meeting.title}
+          onClose={() => setShowSchedule(false)}
+          onScheduled={() => setShowSchedule(false)}
+        />
+      )}
     </div>
   )
 }
