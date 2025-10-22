@@ -33,7 +33,7 @@ const ScheduleFollowup = ({ meetingId, meetingTitle, onClose, onScheduled }) => 
       };
 
       // ✅ FIX: Get token from localStorage
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('meetingRecorderToken');
       
       if (!token) {
         alert('❌ Not authenticated. Please log in again.');
