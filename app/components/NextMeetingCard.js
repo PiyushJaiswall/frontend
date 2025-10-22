@@ -7,6 +7,8 @@ const NextMeetingCard = () => {
   const [loading, setLoading] = useState(true);
   const [timeUntil, setTimeUntil] = useState('');
 
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://piyushjaiswall-backend.hf.space';
+
   useEffect(() => {
     fetchNextMeeting();
     const interval = setInterval(fetchNextMeeting, 60000);
@@ -15,6 +17,7 @@ const NextMeetingCard = () => {
 
   useEffect(() => {
     if (nextMeeting) {
+      updateTimeUntil();
       const interval = setInterval(() => {
         updateTimeUntil();
       }, 1000);
@@ -24,23 +27,27 @@ const NextMeetingCard = () => {
 
   const fetchNextMeeting = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
+      const token = localStorage.getItem('meetingRecorderToken'); // ✅ FIXED
+      if (!token) {
+        setLoading(false);
+        return;
+      }
 
-      const response = await fetch('https://piyushooo-backend.hf.space/api/meetings/next-scheduled', {
+      const response = await fetch(`${backendUrl}/api/calendar/upcoming`, { // ✅ FIXED
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
 
       const data = await response.json();
-      if (data.success && data.next_meeting) {
-        setNextMeeting(data.next_meeting);
+      if (data.success && data.upcoming && data.upcoming.length > 0) { // ✅ FIXED
+        setNextMeeting(data.upcoming[0]);
       } else {
         setNextMeeting(null);
       }
     } catch (error) {
       console.error('Failed to fetch next meeting:', error);
+      setNextMeeting(null);
     } finally {
       setLoading(false);
     }
@@ -50,7 +57,7 @@ const NextMeetingCard = () => {
     if (!nextMeeting) return;
     
     const now = new Date();
-    const meetingTime = new Date(nextMeeting.start_time);
+    const meetingTime = new Date(nextMeeting.meeting_start_time); // ✅ FIXED field name
     const diff = meetingTime - now;
 
     if (diff < 0) {
@@ -85,19 +92,6 @@ const NextMeetingCard = () => {
       month: 'short',
       day: 'numeric'
     });
-  };
-
-  const getPlatformIcon = (platform) => {
-    switch(platform) {
-      case 'google_meet':
-        return '📹';
-      case 'zoom':
-        return '🎥';
-      case 'microsoft_teams':
-        return '💼';
-      default:
-        return '🎯';
-    }
   };
 
   if (loading) {
@@ -135,23 +129,16 @@ const NextMeetingCard = () => {
 
       <div className="space-y-3">
         <h4 className="font-semibold text-lg text-gray-900">
-          {getPlatformIcon(nextMeeting.platform)} {nextMeeting.title}
+          {nextMeeting.meeting_title}
         </h4>
 
         <div className="flex items-center gap-4 text-sm text-gray-600">
           <div className="flex items-center gap-1">
             <Clock className="w-4 h-4" />
-            <span>{formatDate(nextMeeting.start_time)}</span>
+            <span>{formatDate(nextMeeting.meeting_start_time)}</span>
           </div>
-          <span className="font-medium">{formatTime(nextMeeting.start_time)}</span>
+          <span className="font-medium">{formatTime(nextMeeting.meeting_start_time)}</span>
         </div>
-
-        {nextMeeting.attendees && nextMeeting.attendees.length > 0 && (
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <Users className="w-4 h-4" />
-            <span>{nextMeeting.attendees.length} attendee{nextMeeting.attendees.length !== 1 ? 's' : ''}</span>
-          </div>
-        )}
 
         {nextMeeting.meeting_url && (
           <button
