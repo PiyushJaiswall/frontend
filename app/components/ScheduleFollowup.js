@@ -32,7 +32,16 @@ const ScheduleFollowup = ({ meetingId, meetingTitle, onClose, onScheduled }) => 
         attendees: formData.attendees ? formData.attendees.split(',').map(e => e.trim()) : []
       };
 
+      // ✅ FIX: Get token from localStorage
       const token = localStorage.getItem('token');
+      
+      if (!token) {
+        alert('❌ Not authenticated. Please log in again.');
+        return;
+      }
+
+      console.log('🚀 Sending schedule request with token:', token.substring(0, 20) + '...');
+
       const response = await fetch('https://piyushooo-backend.hf.space/api/calendar/schedule-followup', {
         method: 'POST',
         headers: {
@@ -44,12 +53,12 @@ const ScheduleFollowup = ({ meetingId, meetingTitle, onClose, onScheduled }) => 
 
       const data = await response.json();
 
-      if (data.success) {
+      if (response.ok && data.success) {
         alert('✅ Follow-up meeting scheduled! You will receive a reminder 30 minutes before.');
         onScheduled && onScheduled(data.event);
         onClose && onClose();
       } else {
-        throw new Error(data.message || 'Failed to schedule meeting');
+        throw new Error(data.detail || data.message || 'Failed to schedule meeting');
       }
     } catch (error) {
       console.error('Schedule error:', error);
@@ -138,7 +147,7 @@ const ScheduleFollowup = ({ meetingId, meetingTitle, onClose, onScheduled }) => 
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Attendees (comma-separated)
+                Attendees (comma-separated emails)
               </label>
               <input
                 type="text"
