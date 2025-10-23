@@ -49,6 +49,7 @@ export default function Login() {
         // Store token and user info
         localStorage.setItem('meetingRecorderToken', token);
         localStorage.setItem('userInfo', JSON.stringify(userInfo));
+        setCookie('meetingRecorderToken', token);
         
         console.log('✅ Token stored, redirecting to dashboard');
         
@@ -92,6 +93,7 @@ export default function Login() {
       
       localStorage.setItem('meetingRecorderToken', data.access_token);
       localStorage.setItem('userInfo', JSON.stringify(data.user));
+      setCookie('meetingRecorderToken', data.access_token);
       
       router.push('/');
 
