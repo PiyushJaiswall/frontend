@@ -50,6 +50,17 @@ export default function Home() {
   
         // Logged in - set user data
         setUser(JSON.parse(userInfo));
+        // ✅ Sync token to Chrome extension if installed
+        try {
+          const token = localStorage.getItem('meetingRecorderToken');
+          if (token && window.chrome && chrome.storage) {
+            await chrome.storage.sync.set({ 'backendToken': token });
+            console.log('✅ Token synced to extension');
+          }
+        } catch (e) {
+          // Extension not installed or storage not available
+          console.log('Extension not detected');
+        }
       } catch (error) {
         console.error('Auth check failed:', error);
       } finally {
