@@ -3,6 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
+// Helper to set cookie
+const setCookie = (name, value, days = 30) => {
+  const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString();
+  document.cookie = `${name}=${value}; expires=${expires}; path=/; SameSite=Lax`;
+};
+
 export default function Login() {
   const router = useRouter();
   const searchParams = useSearchParams();
