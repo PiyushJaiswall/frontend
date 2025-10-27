@@ -14,13 +14,11 @@ export default function MeetingPopup({ onClose, onSave, darkMode }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsSaving(true)
-
+    
     try {
       // Generate transcript ID each time for uniqueness
       const generatedTranscriptId = crypto.randomUUID()
-
-      // POST request - only send fields backend expects!
-      // UPDATED: do not send meeting_id, let backend handle it.
+      
       const transcriptResponse = await fetch('/api/meetings', {
         method: 'POST',
         headers: {
@@ -37,13 +35,14 @@ export default function MeetingPopup({ onClose, onSave, darkMode }) {
 
       if (transcriptResponse.ok) {
         const { meeting } = await transcriptResponse.json()
-        // Add client_id/transcript for display (if needs to be shown in UI)
+        
         const completeData = {
           ...meeting,
           transcript_text: formData.transcript_text,
-          client_id: 'manual_entry', // Use static/client entry if needed
+          client_id: 'manual_entry',
           transcript_created_at: new Date().toISOString()
         }
+        
         onSave(completeData)
         alert('Meeting added successfully!')
       } else {
@@ -53,7 +52,7 @@ export default function MeetingPopup({ onClose, onSave, darkMode }) {
       console.error('Save error:', error)
       alert('Failed to save meeting: ' + error.message)
     }
-
+    
     setIsSaving(false)
   }
 
@@ -100,151 +99,233 @@ export default function MeetingPopup({ onClose, onSave, darkMode }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-hidden">
+    <div 
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: '1rem'
+      }}
+      onClick={onClose}
+    >
+      <div 
+        className={`rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto ${
+          darkMode ? 'bg-gray-800' : 'bg-white'
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex justify-between items-center p-6 border-b dark:border-gray-700">
-          <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
-            Add Meeting Manually
+        <div className={`sticky top-0 p-6 border-b flex justify-between items-center ${
+          darkMode 
+            ? 'bg-gray-800 border-gray-700' 
+            : 'bg-white border-gray-200'
+        }`}>
+          <h2 className={`text-2xl font-bold ${
+            darkMode ? 'text-white' : 'text-gray-900'
+          }`}>
+            Add Meeting
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-xl"
+            className={`text-2xl font-bold transition-colors ${
+              darkMode 
+                ? 'text-gray-400 hover:text-gray-200' 
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
           >
-            ✕
+            ×
           </button>
         </div>
 
-        {/* Content */}
-        <form onSubmit={handleSubmit} className="overflow-y-auto max-h-[calc(90vh-100px)]">
-          <div className="p-6 space-y-6">
-            {/* Title */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Meeting Title *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.title}
-                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                className="w-full border dark:border-gray-600 rounded-lg px-3 py-2 dark:bg-gray-700 dark:text-white"
-                placeholder="Enter meeting title"
-              />
-            </div>
-
-            {/* Summary */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Summary
-              </label>
-              <textarea
-                value={formData.summary}
-                onChange={(e) => setFormData(prev => ({ ...prev, summary: e.target.value }))}
-                className="w-full border dark:border-gray-600 rounded-lg px-3 py-2 h-32 dark:bg-gray-700 dark:text-white"
-                placeholder="Enter meeting summary"
-              />
-            </div>
-
-            {/* Key Points */}
-            <div>
-              <div className="flex justify-between items-center mb-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Key Points
-                </label>
-                <button
-                  type="button"
-                  onClick={addKeyPoint}
-                  className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm"
-                >
-                  + Add Point
-                </button>
-              </div>
-              <div className="space-y-2">
-                {formData.key_points.map((point, index) => (
-                  <div key={index} className="flex items-center space-x-2">
-                    <input
-                      type="text"
-                      value={point}
-                      onChange={(e) => updateKeyPoint(index, e.target.value)}
-                      className="flex-1 border dark:border-gray-600 rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
-                      placeholder="Key point..."
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeKeyPoint(index)}
-                      className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Follow-up Points */}
-            <div>
-              <div className="flex justify-between items-center mb-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Follow-up Points
-                </label>
-                <button
-                  type="button"
-                  onClick={addFollowupPoint}
-                  className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm"
-                >
-                  + Add Follow-up
-                </button>
-              </div>
-              <div className="space-y-2">
-                {formData.followup_points.map((point, index) => (
-                  <div key={index} className="flex items-center space-x-2">
-                    <input
-                      type="text"
-                      value={point}
-                      onChange={(e) => updateFollowupPoint(index, e.target.value)}
-                      className="flex-1 border dark:border-gray-600 rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
-                      placeholder="Follow-up point..."
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeFollowupPoint(index)}
-                      className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Full Transcript (Optional) */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Full Transcript (Optional)
-              </label>
-              <textarea
-                value={formData.transcript_text}
-                onChange={(e) => setFormData(prev => ({ ...prev, transcript_text: e.target.value }))}
-                className="w-full border dark:border-gray-600 rounded-lg px-3 py-2 h-40 dark:bg-gray-700 dark:text-white"
-                placeholder="Paste or type the full meeting transcript here..."
-              />
-            </div>
+        {/* Form */}
+        <form onSubmit={handleSubmit} style={{ padding: '1.5rem' }}>
+          {/* Title */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-gray-200' : 'text-gray-900'
+            }`}>
+              Meeting Title *
+            </label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({...formData, title: e.target.value})}
+              required
+              className={`w-full px-4 py-3 rounded-lg border transition-all ${
+                darkMode 
+                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+              } focus:ring-2 focus:ring-purple-500 focus:border-transparent`}
+              placeholder="Enter meeting title"
+            />
           </div>
 
-          {/* Footer */}
-          <div className="flex justify-end space-x-3 p-6 border-t dark:border-gray-700">
+          {/* Summary */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-gray-200' : 'text-gray-900'
+            }`}>
+              Summary
+            </label>
+            <textarea
+              value={formData.summary}
+              onChange={(e) => setFormData({...formData, summary: e.target.value})}
+              rows={4}
+              className={`w-full px-4 py-3 rounded-lg border transition-all resize-none ${
+                darkMode 
+                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+              } focus:ring-2 focus:ring-purple-500 focus:border-transparent`}
+              placeholder="Brief summary of the meeting"
+            />
+          </div>
+
+          {/* Key Points */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+              <label className={`text-sm font-medium ${
+                darkMode ? 'text-gray-200' : 'text-gray-900'
+              }`}>
+                Key Points
+              </label>
+              <button
+                type="button"
+                onClick={addKeyPoint}
+                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                  darkMode 
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white' 
+                    : 'bg-purple-500 hover:bg-purple-600 text-white'
+                }`}
+              >
+                + Add Point
+              </button>
+            </div>
+            
+            {formData.key_points.map((point, index) => (
+              <div key={index} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <input
+                  type="text"
+                  value={point}
+                  onChange={(e) => updateKeyPoint(index, e.target.value)}
+                  className={`flex-1 px-4 py-3 rounded-lg border transition-all ${
+                    darkMode 
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                  } focus:ring-2 focus:ring-purple-500 focus:border-transparent`}
+                  placeholder={`Key point ${index + 1}`}
+                />
+                {formData.key_points.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeKeyPoint(index)}
+                    className={`px-3 py-2 rounded-lg font-bold transition-colors ${
+                      darkMode 
+                        ? 'bg-red-600 hover:bg-red-700 text-white' 
+                        : 'bg-red-500 hover:bg-red-600 text-white'
+                    }`}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Follow-up Points */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+              <label className={`text-sm font-medium ${
+                darkMode ? 'text-gray-200' : 'text-gray-900'
+              }`}>
+                Follow-up Points
+              </label>
+              <button
+                type="button"
+                onClick={addFollowupPoint}
+                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                  darkMode 
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                    : 'bg-blue-500 hover:bg-blue-600 text-white'
+                }`}
+              >
+                + Add Point
+              </button>
+            </div>
+            
+            {formData.followup_points.map((point, index) => (
+              <div key={index} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <input
+                  type="text"
+                  value={point}
+                  onChange={(e) => updateFollowupPoint(index, e.target.value)}
+                  className={`flex-1 px-4 py-3 rounded-lg border transition-all ${
+                    darkMode 
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                  } focus:ring-2 focus:ring-purple-500 focus:border-transparent`}
+                  placeholder={`Follow-up point ${index + 1}`}
+                />
+                {formData.followup_points.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeFollowupPoint(index)}
+                    className={`px-3 py-2 rounded-lg font-bold transition-colors ${
+                      darkMode 
+                        ? 'bg-red-600 hover:bg-red-700 text-white' 
+                        : 'bg-red-500 hover:bg-red-600 text-white'
+                    }`}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Transcript */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-gray-200' : 'text-gray-900'
+            }`}>
+              Full Transcript (Optional)
+            </label>
+            <textarea
+              value={formData.transcript_text}
+              onChange={(e) => setFormData({...formData, transcript_text: e.target.value})}
+              rows={6}
+              className={`w-full px-4 py-3 rounded-lg border transition-all resize-vertical text-sm ${
+                darkMode 
+                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+              } focus:ring-2 focus:ring-purple-500 focus:border-transparent`}
+              placeholder="Full transcript text (optional)"
+            />
+          </div>
+
+          {/* Buttons */}
+          <div style={{ display: 'flex', gap: '0.75rem', paddingTop: '1rem' }}>
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              className={`flex-1 px-6 py-3 border rounded-lg font-medium transition-all ${
+                darkMode 
+                  ? 'border-gray-600 text-gray-300 hover:bg-gray-700' 
+                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isSaving || !formData.title.trim()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isSaving}
+              className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all font-medium shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSaving ? 'Saving...' : 'Save Meeting'}
             </button>
